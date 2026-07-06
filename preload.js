@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   closeWindow: () => ipcRenderer.invoke('window:close'),
+  togglePin: () => ipcRenderer.invoke('window:toggle-pin'),
+  getPinState: () => ipcRenderer.invoke('window:get-pin-state'),
 
   getAutostart: () => ipcRenderer.invoke('settings:get-autostart'),
   setAutostart: (enabled) => ipcRenderer.invoke('settings:set-autostart', enabled),

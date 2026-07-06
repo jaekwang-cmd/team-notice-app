@@ -10,6 +10,7 @@
     <div class="titlebar">
       <span class="app-title">🗓️ Team Notice</span>
       <div class="window-controls">
+        <button id="btn-pin" title="창 고정 (항상 위 + 이동 잠금)">📌</button>
         <button id="btn-settings" title="설정">⚙️</button>
         <button id="btn-minimize" title="최소화">—</button>
         <button id="btn-close" title="닫기">✕</button>
@@ -94,6 +95,15 @@
       </label>
 
       <h3 class="theme-section-title">테마 (나만 보이는 개인 설정)</h3>
+
+      <div class="theme-row style-row">
+        <span>테마 모드</span>
+      </div>
+      <div class="style-options">
+        <label><input type="radio" name="theme-mode" value="dark" checked /> 다크테마</label>
+        <label><input type="radio" name="theme-mode" value="light" /> 라이트테마</label>
+        <label><input type="radio" name="theme-mode" value="custom" /> 사용자 설정</label>
+      </div>
 
       <div class="theme-row">
         <span>전체 배경색</span>

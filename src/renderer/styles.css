@@ -71,6 +71,10 @@ html, body {
   background: rgba(255, 255, 255, 0.16);
 }
 
+.window-controls button.active {
+  background: var(--accent);
+}
+
 #btn-close:hover {
   background: #e5484d;
 }

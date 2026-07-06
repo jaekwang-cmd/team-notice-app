@@ -34,6 +34,7 @@ let dynamicAdminEmails = new Set();
 let mainWindow;
 let tray = null;
 let isQuitting = false;
+let isPinned = false;
 let firebaseHandle = null;
 
 let unsubscribeAnnouncements = null;
@@ -411,6 +412,13 @@ app.on('window-all-closed', () => {});
 // --- Window controls ---
 ipcMain.handle('window:minimize', () => mainWindow.minimize());
 ipcMain.handle('window:close', () => mainWindow.close());
+ipcMain.handle('window:toggle-pin', () => {
+  isPinned = !isPinned;
+  mainWindow.setAlwaysOnTop(isPinned);
+  mainWindow.setMovable(!isPinned);
+  return isPinned;
+});
+ipcMain.handle('window:get-pin-state', () => isPinned);
 
 // --- Settings ---
 ipcMain.handle('settings:get-autostart', () => app.getLoginItemSettings().openAtLogin);

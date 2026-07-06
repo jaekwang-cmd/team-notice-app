@@ -633,6 +633,13 @@ noticeText.addEventListener('keydown', (e) => {
 document.getElementById('btn-minimize').onclick = () => window.api.minimizeWindow();
 document.getElementById('btn-close').onclick = () => window.api.closeWindow();
 
+const pinBtn = document.getElementById('btn-pin');
+pinBtn.onclick = async () => {
+  const pinned = await window.api.togglePin();
+  pinBtn.classList.toggle('active', pinned);
+  pinBtn.title = pinned ? '고정 해제' : '창 고정 (항상 위 + 이동 잠금)';
+};
+
 // --- Settings panel ---
 const settingsPanel = document.getElementById('settings-panel');
 const autostartToggle = document.getElementById('autostart-toggle');
@@ -677,7 +684,9 @@ document.getElementById('settings-close').onclick = () => settingsPanel.classLis
 document.getElementById('settings-save').onclick = async () => {
   await window.api.setAutostart(autostartToggle.checked);
   const checkedStyle = document.querySelector('input[name="card-style"]:checked');
+  const checkedMode = document.querySelector('input[name="theme-mode"]:checked');
   const theme = {
+    mode: checkedMode ? checkedMode.value : 'dark',
     bg: themeBgInput.value,
     cellBg: themeCellBgInput.value,
     text: themeTextInput.value,
@@ -709,6 +718,33 @@ const DEFAULT_THEME_INPUTS = {
   font: '',
 };
 
+const THEME_PRESETS = {
+  dark: DEFAULT_THEME_INPUTS,
+  light: {
+    bg: '#f4f5fa',
+    cellBg: '#ffffff',
+    text: '#20232b',
+    accent: '#5865f2',
+    eventText: '#1f8a5c',
+    font: '',
+  },
+};
+
+document.querySelectorAll('input[name="theme-mode"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    const preset = THEME_PRESETS[radio.value];
+    if (radio.checked && preset) fillColorInputs(preset);
+  });
+});
+
+function fillColorInputs(colors) {
+  themeBgInput.value = colors.bg;
+  themeCellBgInput.value = colors.cellBg;
+  themeTextInput.value = colors.text;
+  themeAccentInput.value = colors.accent;
+  themeEventTextInput.value = colors.eventText;
+}
+
 function fillThemeInputs(theme) {
   themeBgInput.value = theme.bg || DEFAULT_THEME_INPUTS.bg;
   themeCellBgInput.value = theme.cellBg || DEFAULT_THEME_INPUTS.cellBg;
@@ -716,9 +752,14 @@ function fillThemeInputs(theme) {
   themeAccentInput.value = theme.accent || DEFAULT_THEME_INPUTS.accent;
   themeEventTextInput.value = theme.eventText || DEFAULT_THEME_INPUTS.eventText;
   themeFontSelect.value = theme.font || '';
+
   const style = theme.cardStyle || 'glass';
-  const radio = document.querySelector(`input[name="card-style"][value="${style}"]`);
-  if (radio) radio.checked = true;
+  const styleRadio = document.querySelector(`input[name="card-style"][value="${style}"]`);
+  if (styleRadio) styleRadio.checked = true;
+
+  const mode = theme.mode || 'dark';
+  const modeRadio = document.querySelector(`input[name="theme-mode"][value="${mode}"]`);
+  if (modeRadio) modeRadio.checked = true;
 }
 
 function darkenHex(hex, amount) {
