@@ -7,6 +7,7 @@ const {
   doc,
   updateDoc,
   deleteDoc,
+  deleteField,
   query,
   orderBy,
   limit,
@@ -43,7 +44,7 @@ function subscribeToAnnouncements(db, onUpdate, onError) {
           text: data.text,
           author: data.author,
           authorUid: data.authorUid,
-          confirmed: Boolean(data.confirmed),
+          confirmedBy: data.confirmedBy || {},
           createdAt: data.createdAt ? data.createdAt.toMillis() : Date.now(),
         };
       });
@@ -58,13 +59,19 @@ async function postAnnouncement(db, { text, author, authorUid }) {
     text,
     author,
     authorUid,
-    confirmed: false,
+    confirmedBy: {},
     createdAt: serverTimestamp(),
   });
 }
 
 async function updateAnnouncement(db, id, data) {
   await updateDoc(doc(db, 'announcements', id), data);
+}
+
+async function setConfirmedBy(db, id, uid, name, confirmed) {
+  await updateDoc(doc(db, 'announcements', id), {
+    [`confirmedBy.${uid}`]: confirmed ? name : deleteField(),
+  });
 }
 
 async function deleteAnnouncement(db, id) {
@@ -78,5 +85,6 @@ module.exports = {
   subscribeToAnnouncements,
   postAnnouncement,
   updateAnnouncement,
+  setConfirmedBy,
   deleteAnnouncement,
 };

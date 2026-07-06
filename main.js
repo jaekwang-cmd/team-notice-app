@@ -36,9 +36,9 @@ let isFirstAnnouncementSnapshot = true;
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 980,
-    height: 900,
+    height: 940,
     minWidth: 880,
-    minHeight: 760,
+    minHeight: 860,
     frame: false,
     backgroundColor: '#161a2b',
     webPreferences: {
@@ -233,7 +233,8 @@ ipcMain.handle('announcements:delete', async (_e, id) => {
 
 ipcMain.handle('announcements:set-confirmed', async (_e, { id, confirmed }) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
-  const { isAdmin } = currentUserPayload();
-  if (!isAdmin) throw new Error('NOT_ADMIN');
-  await firebaseClient.updateAnnouncement(firebaseHandle.db, id, { confirmed });
+  const user = firebaseHandle.auth.currentUser;
+  if (!user) throw new Error('NOT_SIGNED_IN');
+  const name = user.displayName || user.email || '익명';
+  await firebaseClient.setConfirmedBy(firebaseHandle.db, id, user.uid, name, confirmed);
 });

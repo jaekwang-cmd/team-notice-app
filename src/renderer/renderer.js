@@ -210,8 +210,12 @@ function renderAnnouncements() {
   // announcements arrive newest-first from Firestore; show oldest-first (chat style)
   const ordered = [...announcements].reverse();
   ordered.forEach((a) => {
+    const confirmedBy = a.confirmedBy || {};
+    const confirmedNames = Object.values(confirmedBy);
+    const iConfirmed = currentUser.signedIn && Boolean(confirmedBy[currentUser.uid]);
+
     const item = document.createElement('div');
-    item.className = 'notice-item' + (a.confirmed ? ' confirmed' : '');
+    item.className = 'notice-item' + (iConfirmed ? ' confirmed' : '');
 
     const meta = document.createElement('div');
     meta.className = 'notice-meta';
@@ -227,50 +231,55 @@ function renderAnnouncements() {
     const isOwner = currentUser.signedIn && a.authorUid === currentUser.uid;
     const canManage = isOwner || currentUser.isAdmin;
 
-    if (canManage || currentUser.isAdmin) {
-      const actions = document.createElement('div');
-      actions.className = 'notice-actions';
+    const actions = document.createElement('div');
+    actions.className = 'notice-actions';
 
-      if (canManage) {
-        const editBtn = document.createElement('button');
-        editBtn.textContent = '수정';
-        editBtn.onclick = () => startEditAnnouncement(item, a);
-        actions.appendChild(editBtn);
+    if (canManage) {
+      const editBtn = document.createElement('button');
+      editBtn.textContent = '수정';
+      editBtn.onclick = () => startEditAnnouncement(item, a);
+      actions.appendChild(editBtn);
 
-        const delBtn = document.createElement('button');
-        delBtn.textContent = '삭제';
-        delBtn.onclick = async () => {
-          if (!confirm('이 공지를 삭제할까요?')) return;
-          try {
-            await window.api.deleteAnnouncement(a.id);
-          } catch (err) {
-            console.error('공지 삭제 실패:', err);
-            alert('삭제에 실패했습니다.');
-          }
-        };
-        actions.appendChild(delBtn);
-      }
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '삭제';
+      delBtn.onclick = async () => {
+        if (!confirm('이 공지를 삭제할까요?')) return;
+        try {
+          await window.api.deleteAnnouncement(a.id);
+        } catch (err) {
+          console.error('공지 삭제 실패:', err);
+          alert('삭제에 실패했습니다.');
+        }
+      };
+      actions.appendChild(delBtn);
+    }
 
-      if (currentUser.isAdmin) {
-        const confirmLabel = document.createElement('label');
-        confirmLabel.className = 'confirm-label';
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = Boolean(a.confirmed);
-        checkbox.onchange = async () => {
-          try {
-            await window.api.setAnnouncementConfirmed(a.id, checkbox.checked);
-          } catch (err) {
-            console.error('확인 처리 실패:', err);
-            checkbox.checked = !checkbox.checked;
-          }
-        };
-        confirmLabel.appendChild(checkbox);
-        confirmLabel.appendChild(document.createTextNode('확인함'));
-        actions.appendChild(confirmLabel);
-      }
+    if (currentUser.signedIn) {
+      const confirmLabel = document.createElement('label');
+      confirmLabel.className = 'confirm-label';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = iConfirmed;
+      checkbox.onchange = async () => {
+        try {
+          await window.api.setAnnouncementConfirmed(a.id, checkbox.checked);
+        } catch (err) {
+          console.error('확인 처리 실패:', err);
+          checkbox.checked = !checkbox.checked;
+        }
+      };
+      confirmLabel.appendChild(checkbox);
+      confirmLabel.appendChild(document.createTextNode('확인함'));
+      actions.appendChild(confirmLabel);
+    }
 
-      item.appendChild(actions);
+    item.appendChild(actions);
+
+    if (confirmedNames.length > 0) {
+      const confirmedList = document.createElement('div');
+      confirmedList.className = 'notice-confirmed-list';
+      confirmedList.textContent = `확인: ${confirmedNames.map(escapeHtml).join(', ')}`;
+      item.appendChild(confirmedList);
     }
 
     noticeList.appendChild(item);
@@ -567,12 +576,14 @@ document.getElementById('settings-close').onclick = () => settingsPanel.classLis
 
 document.getElementById('settings-save').onclick = async () => {
   await window.api.setAutostart(autostartToggle.checked);
+  const checkedStyle = document.querySelector('input[name="card-style"]:checked');
   const theme = {
     bg: themeBgInput.value,
     cellBg: themeCellBgInput.value,
     text: themeTextInput.value,
     accent: themeAccentInput.value,
     font: themeFontSelect.value || null,
+    cardStyle: checkedStyle ? checkedStyle.value : 'glass',
   };
   await window.api.setTheme(theme);
   applyTheme(theme);
@@ -601,6 +612,9 @@ function fillThemeInputs(theme) {
   themeTextInput.value = theme.text || DEFAULT_THEME_INPUTS.text;
   themeAccentInput.value = theme.accent || DEFAULT_THEME_INPUTS.accent;
   themeFontSelect.value = theme.font || '';
+  const style = theme.cardStyle || 'glass';
+  const radio = document.querySelector(`input[name="card-style"][value="${style}"]`);
+  if (radio) radio.checked = true;
 }
 
 function darkenHex(hex, amount) {
@@ -633,6 +647,8 @@ function applyTheme(theme) {
 
   if (theme.font) root.setProperty('--font-family', theme.font);
   else root.removeProperty('--font-family');
+
+  document.body.setAttribute('data-card-style', theme.cardStyle || 'glass');
 }
 
 themeResetBtn.onclick = async () => {
