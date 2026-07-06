@@ -38,7 +38,8 @@
     "publish": {
       "provider": "github",
       "owner": "jaekwang-cmd",
-      "repo": "team-notice-app"
+      "repo": "team-notice-app",
+      "releaseType": "release"
     },
     "win": {
       "target": "nsis"
