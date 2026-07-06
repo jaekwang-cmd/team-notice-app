@@ -92,6 +92,7 @@ function mapEvent(event) {
     start: event.start.dateTime || event.start.date,
     end: event.end.dateTime || event.end.date,
     allDay: !event.start.dateTime,
+    colorId: event.colorId || null,
   };
 }
 
@@ -114,21 +115,21 @@ async function getUpcomingEvents(googleConfig, { timeMin, timeMax }) {
   return (res.data.items || []).map(mapEvent);
 }
 
-async function createEvent(googleConfig, { summary, start, end }) {
+async function createEvent(googleConfig, { summary, start, end, colorId }) {
   const calendar = getCalendarClient(googleConfig);
   const res = await calendar.events.insert({
     calendarId: 'primary',
-    requestBody: { summary, start, end },
+    requestBody: { summary, start, end, ...(colorId ? { colorId } : {}) },
   });
   return mapEvent(res.data);
 }
 
-async function updateEvent(googleConfig, { eventId, summary, start, end }) {
+async function updateEvent(googleConfig, { eventId, summary, start, end, colorId }) {
   const calendar = getCalendarClient(googleConfig);
   const res = await calendar.events.patch({
     calendarId: 'primary',
     eventId,
-    requestBody: { summary, start, end },
+    requestBody: { summary, start, end, ...(colorId ? { colorId } : {}) },
   });
   return mapEvent(res.data);
 }

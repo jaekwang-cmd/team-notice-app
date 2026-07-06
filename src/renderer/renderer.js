@@ -263,6 +263,21 @@ function renderAnnouncements() {
       actions.appendChild(delBtn);
     }
 
+    if (currentUser.isAdmin) {
+      const shoutBtn = document.createElement('button');
+      shoutBtn.textContent = '📢 외치기';
+      shoutBtn.onclick = async () => {
+        if (!confirm('이 공지를 모든 팀원에게 다시 알림으로 보낼까요?')) return;
+        try {
+          await window.api.shoutAnnouncement(a.id);
+        } catch (err) {
+          console.error('외치기 실패:', err);
+          alert('실패했습니다.');
+        }
+      };
+      actions.appendChild(shoutBtn);
+    }
+
     if (currentUser.signedIn) {
       const confirmLabel = document.createElement('label');
       confirmLabel.className = 'confirm-label';
@@ -363,9 +378,11 @@ const eventTimeRow = document.getElementById('event-time-row');
 const eventStartTime = document.getElementById('event-start-time');
 const eventEndTime = document.getElementById('event-end-time');
 const eventCancelBtn = document.getElementById('event-cancel');
+const eventShareTeamBtn = document.getElementById('event-share-team-btn');
 
 let selectedDateStr = null;
 let editingEventId = null;
+let editingTeamEventId = null;
 
 function formatEventTime(ev) {
   if (ev.allDay) return '하루 종일';
@@ -399,40 +416,64 @@ function renderDayEventList() {
     time.className = 'event-time';
     time.textContent = formatEventTime(ev);
 
-    const actions = document.createElement('div');
-    actions.className = 'event-actions';
+    if (ev.teamEventId) {
+      const badge = document.createElement('div');
+      badge.className = 'event-team-badge';
+      badge.textContent = '👥 팀 공유 일정';
+      item.appendChild(badge);
+    }
 
-    const editBtn = document.createElement('button');
-    editBtn.textContent = '수정';
-    editBtn.onclick = () => showEventForm(ev);
+    const canManageEvent = ev.teamEventId ? currentUser.isAdmin : true;
 
-    const delBtn = document.createElement('button');
-    delBtn.textContent = '삭제';
-    delBtn.onclick = async () => {
-      if (!confirm('이 일정을 삭제할까요? (구글 캘린더에서도 삭제됩니다)')) return;
-      try {
-        await window.api.googleDeleteEvent({ eventId: ev.id });
-        await refreshEventsAndDayPanel();
-      } catch (err) {
-        console.error('일정 삭제 실패:', err);
-        alert('삭제에 실패했습니다.');
-      }
-    };
+    if (canManageEvent) {
+      const actions = document.createElement('div');
+      actions.className = 'event-actions';
 
-    actions.appendChild(editBtn);
-    actions.appendChild(delBtn);
+      const editBtn = document.createElement('button');
+      editBtn.textContent = '수정';
+      editBtn.onclick = () => showEventForm(ev);
 
-    item.appendChild(title);
-    item.appendChild(time);
-    item.appendChild(actions);
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '삭제';
+      delBtn.onclick = async () => {
+        const msg = ev.teamEventId
+          ? '이 팀 공유 일정을 삭제할까요? (모든 팀원 캘린더에서 삭제됩니다)'
+          : '이 일정을 삭제할까요? (구글 캘린더에서도 삭제됩니다)';
+        if (!confirm(msg)) return;
+        try {
+          if (ev.teamEventId) {
+            await window.api.deleteTeamEvent(ev.teamEventId);
+          } else {
+            await window.api.googleDeleteEvent({ eventId: ev.id });
+          }
+          await refreshEventsAndDayPanel();
+        } catch (err) {
+          console.error('일정 삭제 실패:', err);
+          alert('삭제에 실패했습니다.');
+        }
+      };
+
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+      item.appendChild(title);
+      item.appendChild(time);
+      item.appendChild(actions);
+    } else {
+      item.appendChild(title);
+      item.appendChild(time);
+    }
+
     dayEventList.appendChild(item);
   });
 }
 
 function showEventForm(ev) {
-  editingEventId = ev ? ev.id : null;
+  editingEventId = ev && !ev.teamEventId ? ev.id : null;
+  editingTeamEventId = ev && ev.teamEventId ? ev.teamEventId : null;
   eventForm.classList.remove('hidden');
   eventAddBtn.classList.add('hidden');
+  // Only offer "share as team event" when creating a brand-new event, not when editing.
+  eventShareTeamBtn.classList.toggle('hidden', !(currentUser.isAdmin && !ev));
 
   if (ev) {
     eventTitleInput.value = ev.title;
@@ -457,6 +498,7 @@ function hideEventForm() {
   eventForm.classList.add('hidden');
   eventAddBtn.classList.remove('hidden');
   editingEventId = null;
+  editingTeamEventId = null;
 }
 
 eventAlldayCheckbox.addEventListener('change', () => {
@@ -466,27 +508,36 @@ eventAlldayCheckbox.addEventListener('change', () => {
 eventAddBtn.onclick = () => showEventForm(null);
 eventCancelBtn.onclick = hideEventForm;
 
+function buildEventTimesFromForm() {
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (eventAlldayCheckbox.checked) {
+    return { start: { date: selectedDateStr }, end: { date: addDaysStr(selectedDateStr, 1) } };
+  }
+  return {
+    start: { dateTime: `${selectedDateStr}T${eventStartTime.value}:00`, timeZone },
+    end: { dateTime: `${selectedDateStr}T${eventEndTime.value}:00`, timeZone },
+  };
+}
+
 eventForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const summary = eventTitleInput.value.trim();
   if (!summary) return;
 
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  let start;
-  let end;
-
-  if (eventAlldayCheckbox.checked) {
-    start = { date: selectedDateStr };
-    end = { date: addDaysStr(selectedDateStr, 1) };
-  } else {
-    start = { dateTime: `${selectedDateStr}T${eventStartTime.value}:00`, timeZone };
-    end = { dateTime: `${selectedDateStr}T${eventEndTime.value}:00`, timeZone };
-  }
+  const { start, end } = buildEventTimesFromForm();
 
   const saveBtn = document.getElementById('event-save');
   saveBtn.disabled = true;
   try {
-    if (editingEventId) {
+    if (editingTeamEventId) {
+      await window.api.updateTeamEvent({
+        id: editingTeamEventId,
+        title: summary,
+        start,
+        end,
+        allDay: eventAlldayCheckbox.checked,
+      });
+    } else if (editingEventId) {
       await window.api.googleUpdateEvent({ eventId: editingEventId, summary, start, end });
     } else {
       await window.api.googleCreateEvent({ summary, start, end });
@@ -500,6 +551,30 @@ eventForm.addEventListener('submit', async (e) => {
     saveBtn.disabled = false;
   }
 });
+
+eventShareTeamBtn.onclick = async () => {
+  const summary = eventTitleInput.value.trim();
+  if (!summary) return;
+
+  const { start, end } = buildEventTimesFromForm();
+
+  eventShareTeamBtn.disabled = true;
+  try {
+    await window.api.createTeamEvent({
+      title: summary,
+      start,
+      end,
+      allDay: eventAlldayCheckbox.checked,
+    });
+    hideEventForm();
+    await refreshEventsAndDayPanel();
+  } catch (err) {
+    console.error('팀 공유 일정 등록 실패:', err);
+    alert('팀 공유 일정 등록에 실패했습니다.');
+  } finally {
+    eventShareTeamBtn.disabled = false;
+  }
+};
 
 async function refreshEventsAndDayPanel() {
   const gridStart = startOfGrid(viewYear, viewMonth);
@@ -575,11 +650,39 @@ document.getElementById('btn-close').onclick = () => window.api.closeWindow();
 const settingsPanel = document.getElementById('settings-panel');
 const autostartToggle = document.getElementById('autostart-toggle');
 
+const adminSection = document.getElementById('admin-section');
+const rootAdminList = document.getElementById('root-admin-list');
+const adminEmailsInput = document.getElementById('admin-emails-input');
+
 document.getElementById('btn-settings').onclick = async () => {
   autostartToggle.checked = await window.api.getAutostart();
   const theme = await window.api.getTheme();
   fillThemeInputs(theme);
+
+  if (currentUser.isAdmin) {
+    const { rootAdmins, dynamicAdmins } = await window.api.getAdminList();
+    rootAdminList.textContent = rootAdmins.join(', ');
+    adminEmailsInput.value = dynamicAdmins.join('\n');
+    adminSection.classList.remove('hidden');
+  } else {
+    adminSection.classList.add('hidden');
+  }
+
   settingsPanel.classList.remove('hidden');
+};
+
+document.getElementById('admin-save-btn').onclick = async () => {
+  const emails = adminEmailsInput.value
+    .split('\n')
+    .map((e) => e.trim())
+    .filter(Boolean);
+  try {
+    await window.api.setAdminList(emails);
+    alert('관리자 목록이 저장되었습니다.');
+  } catch (err) {
+    console.error('관리자 목록 저장 실패:', err);
+    alert('저장에 실패했습니다.');
+  }
 };
 
 document.getElementById('settings-close').onclick = () => settingsPanel.classList.add('hidden');

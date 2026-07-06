@@ -9,6 +9,9 @@ const googleAuth = require('./src/main/googleAuth');
 const firebaseClient = require('./src/main/firebaseClient');
 
 const settingsStore = new Store({ name: 'app-settings' });
+const teamEventMapStore = new Store({ name: 'team-event-map' }); // teamEventId -> { googleEventId, signature }
+
+const TEAM_EVENT_COLOR_ID = '11'; // Google Calendar "Tomato" red, to visually flag team-shared events
 
 const CONFIG_DIR = app.isPackaged
   ? path.join(process.resourcesPath, 'config')
@@ -25,13 +28,22 @@ function loadConfig() {
 }
 
 const { config, isPlaceholder } = loadConfig();
-const adminEmails = (config.adminEmails || []).map((e) => e.toLowerCase());
+const rootAdminEmails = (config.adminEmails || []).map((e) => e.toLowerCase());
+let dynamicAdminEmails = new Set();
 
 let mainWindow;
 let firebaseHandle = null;
+
 let unsubscribeAnnouncements = null;
 let knownAnnouncementIds = new Set();
+let knownShoutedAt = new Map();
 let isFirstAnnouncementSnapshot = true;
+
+let unsubscribeAdmins = null;
+
+let unsubscribeTeamEvents = null;
+let teamEventsCache = [];
+let isFirstTeamEventsSnapshot = true;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -51,10 +63,13 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'src', 'renderer', 'index.html'));
 }
 
+// --- Announcements realtime ---
+
 function startAnnouncementsSubscription() {
   if (unsubscribeAnnouncements) return; // already subscribed
   isFirstAnnouncementSnapshot = true;
   knownAnnouncementIds = new Set();
+  knownShoutedAt = new Map();
   unsubscribeAnnouncements = firebaseClient.subscribeToAnnouncements(
     firebaseHandle.db,
     handleAnnouncementsUpdate,
@@ -68,20 +83,9 @@ function stopAnnouncementsSubscription() {
     unsubscribeAnnouncements = null;
   }
   knownAnnouncementIds = new Set();
+  knownShoutedAt = new Map();
   isFirstAnnouncementSnapshot = true;
   if (mainWindow) mainWindow.webContents.send('announcements:update', []);
-}
-
-async function trySignInFirebaseFromStoredGoogleSession() {
-  if (!firebaseHandle || !googleAuth.isSignedIn()) return;
-  try {
-    const idToken = await googleAuth.getFreshIdToken(config.google);
-    await firebaseClient.signInWithGoogleIdToken(firebaseHandle.auth, idToken);
-    startAnnouncementsSubscription();
-    if (mainWindow) mainWindow.webContents.send('auth:updated', currentUserPayload());
-  } catch (err) {
-    console.error('저장된 구글 세션으로 재로그인 실패:', err);
-  }
 }
 
 function handleAnnouncementsUpdate(announcements) {
@@ -93,12 +97,157 @@ function handleAnnouncementsUpdate(announcements) {
         body: a.text,
       }).show();
     });
+
+    announcements.forEach((a) => {
+      const prevShout = knownShoutedAt.get(a.id) || null;
+      if (knownAnnouncementIds.has(a.id) && a.shoutedAt && a.shoutedAt !== prevShout) {
+        new Notification({
+          title: `📢🔊 긴급 재알림: ${a.author || '관리자'}`,
+          body: a.text,
+        }).show();
+      }
+    });
   }
   isFirstAnnouncementSnapshot = false;
   knownAnnouncementIds = new Set(announcements.map((a) => a.id));
+  knownShoutedAt = new Map(announcements.map((a) => [a.id, a.shoutedAt]));
 
   if (mainWindow) {
     mainWindow.webContents.send('announcements:update', announcements);
+  }
+}
+
+// --- Dynamic admin list realtime ---
+
+function startAdminsSubscription() {
+  if (unsubscribeAdmins) return;
+  unsubscribeAdmins = firebaseClient.subscribeToAdmins(
+    firebaseHandle.db,
+    (emails) => {
+      dynamicAdminEmails = new Set(emails.map((e) => e.toLowerCase()));
+      if (mainWindow) mainWindow.webContents.send('auth:updated', currentUserPayload());
+    },
+    (err) => console.error('admins subscribe error:', err)
+  );
+}
+
+function stopAdminsSubscription() {
+  if (unsubscribeAdmins) {
+    unsubscribeAdmins();
+    unsubscribeAdmins = null;
+  }
+  dynamicAdminEmails = new Set();
+}
+
+// --- Team-shared calendar events: sync into each signed-in user's OWN Google Calendar ---
+
+function teamEventSignature(ev) {
+  return JSON.stringify({ title: ev.title, start: ev.start, end: ev.end, allDay: ev.allDay });
+}
+
+async function syncTeamEventToCalendar(ev, { notify }) {
+  const mapping = teamEventMapStore.get(ev.id);
+  const signature = teamEventSignature(ev);
+
+  if (!mapping) {
+    const created = await googleAuth.createEvent(config.google, {
+      summary: `👥 ${ev.title}`,
+      start: ev.start,
+      end: ev.end,
+      colorId: TEAM_EVENT_COLOR_ID,
+    });
+    teamEventMapStore.set(ev.id, { googleEventId: created.id, signature });
+    if (notify) {
+      new Notification({ title: '📅 팀 일정 추가', body: `${ev.title} (${ev.createdByName || '관리자'})` }).show();
+    }
+  } else if (mapping.signature !== signature) {
+    await googleAuth.updateEvent(config.google, {
+      eventId: mapping.googleEventId,
+      summary: `👥 ${ev.title}`,
+      start: ev.start,
+      end: ev.end,
+      colorId: TEAM_EVENT_COLOR_ID,
+    });
+    teamEventMapStore.set(ev.id, { googleEventId: mapping.googleEventId, signature });
+  }
+}
+
+async function handleTeamEventsUpdate(events) {
+  const previousIds = new Set(teamEventsCache.map((e) => e.id));
+  const newIds = new Set(events.map((e) => e.id));
+  const notify = !isFirstTeamEventsSnapshot;
+  teamEventsCache = events;
+  isFirstTeamEventsSnapshot = false;
+
+  if (!googleAuth.isSignedIn()) return; // will reconcile once the user signs in
+
+  for (const prevId of previousIds) {
+    if (!newIds.has(prevId)) {
+      const mapping = teamEventMapStore.get(prevId);
+      if (mapping) {
+        try {
+          await googleAuth.deleteEvent(config.google, { eventId: mapping.googleEventId });
+        } catch (err) {
+          console.error('팀 일정 삭제 동기화 실패:', err);
+        }
+        teamEventMapStore.delete(prevId);
+      }
+    }
+  }
+
+  for (const ev of events) {
+    try {
+      await syncTeamEventToCalendar(ev, { notify });
+    } catch (err) {
+      console.error('팀 일정 동기화 실패:', err);
+    }
+  }
+}
+
+async function reconcileTeamEventsForCurrentUser() {
+  if (!googleAuth.isSignedIn()) return;
+  for (const ev of teamEventsCache) {
+    try {
+      await syncTeamEventToCalendar(ev, { notify: false });
+    } catch (err) {
+      console.error('팀 일정 재동기화 실패:', err);
+    }
+  }
+}
+
+function startTeamEventsSubscription() {
+  if (unsubscribeTeamEvents) return;
+  isFirstTeamEventsSnapshot = true;
+  unsubscribeTeamEvents = firebaseClient.subscribeToTeamEvents(
+    firebaseHandle.db,
+    handleTeamEventsUpdate,
+    (err) => console.error('team events subscribe error:', err)
+  );
+}
+
+function stopTeamEventsSubscription() {
+  if (unsubscribeTeamEvents) {
+    unsubscribeTeamEvents();
+    unsubscribeTeamEvents = null;
+  }
+  teamEventsCache = [];
+  isFirstTeamEventsSnapshot = true;
+}
+
+// --- Shared helpers ---
+
+async function trySignInFirebaseFromStoredGoogleSession() {
+  if (!firebaseHandle || !googleAuth.isSignedIn()) return;
+  try {
+    const idToken = await googleAuth.getFreshIdToken(config.google);
+    await firebaseClient.signInWithGoogleIdToken(firebaseHandle.auth, idToken);
+    startAnnouncementsSubscription();
+    startAdminsSubscription();
+    startTeamEventsSubscription();
+    await reconcileTeamEventsForCurrentUser();
+    if (mainWindow) mainWindow.webContents.send('auth:updated', currentUserPayload());
+  } catch (err) {
+    console.error('저장된 구글 세션으로 재로그인 실패:', err);
   }
 }
 
@@ -111,7 +260,8 @@ function currentUserPayload() {
     uid: user.uid,
     displayName: user.displayName,
     email: user.email,
-    isAdmin: adminEmails.includes(email),
+    isAdmin: rootAdminEmails.includes(email) || dynamicAdminEmails.has(email),
+    isRootAdmin: rootAdminEmails.includes(email),
   };
 }
 
@@ -164,6 +314,8 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   stopAnnouncementsSubscription();
+  stopAdminsSubscription();
+  stopTeamEventsSubscription();
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -194,23 +346,50 @@ ipcMain.handle('google:sign-in', async () => {
   if (firebaseHandle) {
     await firebaseClient.signInWithGoogleIdToken(firebaseHandle.auth, idToken);
     startAnnouncementsSubscription();
+    startAdminsSubscription();
+    startTeamEventsSubscription();
+    await reconcileTeamEventsForCurrentUser();
   }
   return currentUserPayload();
 });
 ipcMain.handle('google:sign-out', async () => {
   googleAuth.signOut();
   stopAnnouncementsSubscription();
+  stopAdminsSubscription();
+  stopTeamEventsSubscription();
   if (firebaseHandle) await firebaseClient.signOutFirebase(firebaseHandle.auth);
 });
-ipcMain.handle('google:get-events', (_e, { timeMin, timeMax }) =>
-  googleAuth.getUpcomingEvents(config.google, { timeMin, timeMax })
-);
+ipcMain.handle('google:get-events', async (_e, { timeMin, timeMax }) => {
+  const events = await googleAuth.getUpcomingEvents(config.google, { timeMin, timeMax });
+  const reverseMap = new Map();
+  for (const teamEventId of Object.keys(teamEventMapStore.store)) {
+    reverseMap.set(teamEventMapStore.get(teamEventId).googleEventId, teamEventId);
+  }
+  return events.map((ev) => ({ ...ev, teamEventId: reverseMap.get(ev.id) || null }));
+});
 ipcMain.handle('google:create-event', (_e, payload) => googleAuth.createEvent(config.google, payload));
 ipcMain.handle('google:update-event', (_e, payload) => googleAuth.updateEvent(config.google, payload));
 ipcMain.handle('google:delete-event', (_e, payload) => googleAuth.deleteEvent(config.google, payload));
 
 // --- Current user / admin status ---
 ipcMain.handle('auth:get-current-user', () => currentUserPayload());
+
+function requireAdmin() {
+  const { isAdmin } = currentUserPayload();
+  if (!isAdmin) throw new Error('NOT_ADMIN');
+}
+
+// --- Dynamic admin management (root admins from config.json cannot be removed here) ---
+ipcMain.handle('admin:get-list', () => ({
+  rootAdmins: rootAdminEmails,
+  dynamicAdmins: Array.from(dynamicAdminEmails),
+}));
+ipcMain.handle('admin:set-list', async (_e, emails) => {
+  requireAdmin();
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  const cleaned = emails.map((e) => e.trim().toLowerCase()).filter(Boolean);
+  await firebaseClient.setAdmins(firebaseHandle.db, cleaned);
+});
 
 // --- Announcements ---
 ipcMain.handle('announcements:post', async (_e, text) => {
@@ -237,4 +416,31 @@ ipcMain.handle('announcements:set-confirmed', async (_e, { id, confirmed }) => {
   if (!user) throw new Error('NOT_SIGNED_IN');
   const name = user.displayName || user.email || '익명';
   await firebaseClient.setConfirmedBy(firebaseHandle.db, id, user.uid, name, confirmed);
+});
+
+ipcMain.handle('announcements:shout', async (_e, id) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireAdmin();
+  await firebaseClient.shoutAnnouncement(firebaseHandle.db, id);
+});
+
+// --- Team-shared calendar events (admin manages; auto-synced into everyone's own calendar) ---
+ipcMain.handle('team-events:create', async (_e, payload) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireAdmin();
+  const user = firebaseHandle.auth.currentUser;
+  const createdByName = user.displayName || user.email || '관리자';
+  await firebaseClient.createTeamEvent(firebaseHandle.db, { ...payload, createdByName });
+});
+
+ipcMain.handle('team-events:update', async (_e, { id, ...data }) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireAdmin();
+  await firebaseClient.updateTeamEvent(firebaseHandle.db, id, data);
+});
+
+ipcMain.handle('team-events:delete', async (_e, id) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireAdmin();
+  await firebaseClient.deleteTeamEvent(firebaseHandle.db, id);
 });

@@ -23,15 +23,23 @@ contextBridge.exposeInMainWorld('api', {
 
   getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
 
+  getAdminList: () => ipcRenderer.invoke('admin:get-list'),
+  setAdminList: (emails) => ipcRenderer.invoke('admin:set-list', emails),
+
   postAnnouncement: (text) => ipcRenderer.invoke('announcements:post', text),
   editAnnouncement: (id, text) => ipcRenderer.invoke('announcements:edit', { id, text }),
   deleteAnnouncement: (id) => ipcRenderer.invoke('announcements:delete', id),
   setAnnouncementConfirmed: (id, confirmed) =>
     ipcRenderer.invoke('announcements:set-confirmed', { id, confirmed }),
+  shoutAnnouncement: (id) => ipcRenderer.invoke('announcements:shout', id),
   onAnnouncementsUpdate: (callback) => {
     ipcRenderer.on('announcements:update', (_event, announcements) => callback(announcements));
   },
   onAuthUpdated: (callback) => {
     ipcRenderer.on('auth:updated', (_event, user) => callback(user));
   },
+
+  createTeamEvent: (payload) => ipcRenderer.invoke('team-events:create', payload),
+  updateTeamEvent: (payload) => ipcRenderer.invoke('team-events:update', payload),
+  deleteTeamEvent: (id) => ipcRenderer.invoke('team-events:delete', id),
 });

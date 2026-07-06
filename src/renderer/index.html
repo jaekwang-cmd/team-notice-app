@@ -61,6 +61,7 @@
               </div>
               <div class="event-form-actions">
                 <button type="submit" id="event-save">저장</button>
+                <button type="button" id="event-share-team-btn" class="hidden">팀 공유로 추가</button>
                 <button type="button" id="event-cancel">취소</button>
               </div>
             </form>
@@ -128,6 +129,13 @@
       </div>
 
       <button id="theme-reset" class="theme-reset-btn">기본값으로 초기화</button>
+
+      <div id="admin-section" class="hidden">
+        <h3 class="theme-section-title">관리자 관리</h3>
+        <p class="field-label">기본 관리자: <span id="root-admin-list"></span></p>
+        <textarea id="admin-emails-input" rows="3" placeholder="추가 관리자 이메일 (한 줄에 하나씩)"></textarea>
+        <button id="admin-save-btn" class="theme-reset-btn">관리자 목록 저장</button>
+      </div>
 
       <div class="settings-actions">
         <button id="settings-save">저장</button>

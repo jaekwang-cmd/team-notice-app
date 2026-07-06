@@ -5,6 +5,7 @@ const {
   collection,
   addDoc,
   doc,
+  setDoc,
   updateDoc,
   deleteDoc,
   deleteField,
@@ -32,6 +33,8 @@ async function signOutFirebase(auth) {
   await signOut(auth);
 }
 
+// --- Announcements ---
+
 function subscribeToAnnouncements(db, onUpdate, onError) {
   const q = query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(100));
   return onSnapshot(
@@ -45,6 +48,7 @@ function subscribeToAnnouncements(db, onUpdate, onError) {
           author: data.author,
           authorUid: data.authorUid,
           confirmedBy: data.confirmedBy || {},
+          shoutedAt: data.shoutedAt ? data.shoutedAt.toMillis() : null,
           createdAt: data.createdAt ? data.createdAt.toMillis() : Date.now(),
         };
       });
@@ -60,6 +64,7 @@ async function postAnnouncement(db, { text, author, authorUid }) {
     author,
     authorUid,
     confirmedBy: {},
+    shoutedAt: null,
     createdAt: serverTimestamp(),
   });
 }
@@ -74,8 +79,74 @@ async function setConfirmedBy(db, id, uid, name, confirmed) {
   });
 }
 
+async function shoutAnnouncement(db, id) {
+  await updateDoc(doc(db, 'announcements', id), { shoutedAt: serverTimestamp() });
+}
+
 async function deleteAnnouncement(db, id) {
   await deleteDoc(doc(db, 'announcements', id));
+}
+
+// --- Dynamic admin list ---
+
+function subscribeToAdmins(db, onUpdate, onError) {
+  return onSnapshot(
+    doc(db, 'settings', 'admins'),
+    (docSnap) => {
+      const data = docSnap.data();
+      onUpdate((data && data.emails) || []);
+    },
+    onError
+  );
+}
+
+async function setAdmins(db, emails) {
+  await setDoc(doc(db, 'settings', 'admins'), { emails }, { merge: true });
+}
+
+// --- Team-shared calendar events ---
+
+function subscribeToTeamEvents(db, onUpdate, onError) {
+  return onSnapshot(
+    collection(db, 'teamEvents'),
+    (snapshot) => {
+      const events = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          title: data.title,
+          start: data.start,
+          end: data.end,
+          allDay: Boolean(data.allDay),
+          createdByName: data.createdByName,
+          updatedAt: data.updatedAt ? data.updatedAt.toMillis() : 0,
+        };
+      });
+      onUpdate(events);
+    },
+    onError
+  );
+}
+
+async function createTeamEvent(db, { title, start, end, allDay, createdByName }) {
+  const ref = await addDoc(collection(db, 'teamEvents'), {
+    title,
+    start,
+    end,
+    allDay,
+    createdByName,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+async function updateTeamEvent(db, id, data) {
+  await updateDoc(doc(db, 'teamEvents', id), { ...data, updatedAt: serverTimestamp() });
+}
+
+async function deleteTeamEvent(db, id) {
+  await deleteDoc(doc(db, 'teamEvents', id));
 }
 
 module.exports = {
@@ -86,5 +157,12 @@ module.exports = {
   postAnnouncement,
   updateAnnouncement,
   setConfirmedBy,
+  shoutAnnouncement,
   deleteAnnouncement,
+  subscribeToAdmins,
+  setAdmins,
+  subscribeToTeamEvents,
+  createTeamEvent,
+  updateTeamEvent,
+  deleteTeamEvent,
 };
