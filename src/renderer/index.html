@@ -59,9 +59,12 @@
                 <label>시작 <input type="time" id="event-start-time" value="09:00" /></label>
                 <label>종료 <input type="time" id="event-end-time" value="10:00" /></label>
               </div>
+              <label class="toggle-row small hidden" id="event-team-share-row">
+                <span>👥 팀 일정으로 업로드 (전체 공유)</span>
+                <input type="checkbox" id="event-team-share" />
+              </label>
               <div class="event-form-actions">
                 <button type="submit" id="event-save">저장</button>
-                <button type="button" id="event-share-team-btn" class="hidden">팀 공유로 추가</button>
                 <button type="button" id="event-cancel">취소</button>
               </div>
             </form>

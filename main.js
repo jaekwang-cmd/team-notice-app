@@ -482,22 +482,53 @@ ipcMain.handle('announcements:shout', async (_e, id) => {
 });
 
 // --- Team-shared calendar events (admin manages; auto-synced into everyone's own calendar) ---
+//
+// The cross-team sync (syncTeamEventToCalendar via the Firestore listener) is
+// necessarily async for OTHER clients. But the admin making the change would
+// otherwise have to wait for their own listener round-trip too, which showed up
+// as "delete doesn't seem to work" when the UI refreshed before that arrived.
+// So here we also apply the change to the *caller's own* calendar immediately.
 ipcMain.handle('team-events:create', async (_e, payload) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireAdmin();
   const user = firebaseHandle.auth.currentUser;
   const createdByName = user.displayName || user.email || '관리자';
-  await firebaseClient.createTeamEvent(firebaseHandle.db, { ...payload, createdByName });
+  const id = await firebaseClient.createTeamEvent(firebaseHandle.db, { ...payload, createdByName });
+  if (googleAuth.isSignedIn()) {
+    try {
+      await syncTeamEventToCalendar({ id, ...payload, createdByName }, { notify: false });
+    } catch (err) {
+      console.error('팀 일정 즉시 동기화 실패:', err);
+    }
+  }
 });
 
 ipcMain.handle('team-events:update', async (_e, { id, ...data }) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireAdmin();
   await firebaseClient.updateTeamEvent(firebaseHandle.db, id, data);
+  if (googleAuth.isSignedIn()) {
+    try {
+      await syncTeamEventToCalendar({ id, ...data }, { notify: false });
+    } catch (err) {
+      console.error('팀 일정 즉시 동기화 실패:', err);
+    }
+  }
 });
 
 ipcMain.handle('team-events:delete', async (_e, id) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireAdmin();
   await firebaseClient.deleteTeamEvent(firebaseHandle.db, id);
+  const mapping = teamEventMapStore.get(id);
+  if (mapping) {
+    if (googleAuth.isSignedIn()) {
+      try {
+        await googleAuth.deleteEvent(config.google, { eventId: mapping.googleEventId });
+      } catch (err) {
+        console.error('팀 일정 즉시 삭제 동기화 실패:', err);
+      }
+    }
+    teamEventMapStore.delete(id);
+  }
 });

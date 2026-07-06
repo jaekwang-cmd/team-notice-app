@@ -378,7 +378,8 @@ const eventTimeRow = document.getElementById('event-time-row');
 const eventStartTime = document.getElementById('event-start-time');
 const eventEndTime = document.getElementById('event-end-time');
 const eventCancelBtn = document.getElementById('event-cancel');
-const eventShareTeamBtn = document.getElementById('event-share-team-btn');
+const eventTeamShareRow = document.getElementById('event-team-share-row');
+const eventTeamShareCheckbox = document.getElementById('event-team-share');
 
 let selectedDateStr = null;
 let editingEventId = null;
@@ -472,8 +473,9 @@ function showEventForm(ev) {
   editingTeamEventId = ev && ev.teamEventId ? ev.teamEventId : null;
   eventForm.classList.remove('hidden');
   eventAddBtn.classList.add('hidden');
+  eventTeamShareCheckbox.checked = false;
   // Only offer "share as team event" when creating a brand-new event, not when editing.
-  eventShareTeamBtn.classList.toggle('hidden', !(currentUser.isAdmin && !ev));
+  eventTeamShareRow.classList.toggle('hidden', !(currentUser.isAdmin && !ev));
 
   if (ev) {
     eventTitleInput.value = ev.title;
@@ -525,6 +527,7 @@ eventForm.addEventListener('submit', async (e) => {
   if (!summary) return;
 
   const { start, end } = buildEventTimesFromForm();
+  const asTeamEvent = !editingEventId && !editingTeamEventId && eventTeamShareCheckbox.checked;
 
   const saveBtn = document.getElementById('event-save');
   saveBtn.disabled = true;
@@ -539,6 +542,8 @@ eventForm.addEventListener('submit', async (e) => {
       });
     } else if (editingEventId) {
       await window.api.googleUpdateEvent({ eventId: editingEventId, summary, start, end });
+    } else if (asTeamEvent) {
+      await window.api.createTeamEvent({ title: summary, start, end, allDay: eventAlldayCheckbox.checked });
     } else {
       await window.api.googleCreateEvent({ summary, start, end });
     }
@@ -551,30 +556,6 @@ eventForm.addEventListener('submit', async (e) => {
     saveBtn.disabled = false;
   }
 });
-
-eventShareTeamBtn.onclick = async () => {
-  const summary = eventTitleInput.value.trim();
-  if (!summary) return;
-
-  const { start, end } = buildEventTimesFromForm();
-
-  eventShareTeamBtn.disabled = true;
-  try {
-    await window.api.createTeamEvent({
-      title: summary,
-      start,
-      end,
-      allDay: eventAlldayCheckbox.checked,
-    });
-    hideEventForm();
-    await refreshEventsAndDayPanel();
-  } catch (err) {
-    console.error('팀 공유 일정 등록 실패:', err);
-    alert('팀 공유 일정 등록에 실패했습니다.');
-  } finally {
-    eventShareTeamBtn.disabled = false;
-  }
-};
 
 async function refreshEventsAndDayPanel() {
   const gridStart = startOfGrid(viewYear, viewMonth);
