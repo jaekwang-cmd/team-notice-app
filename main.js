@@ -48,6 +48,7 @@ let teamEventsCache = [];
 let isFirstTeamEventsSnapshot = true;
 const teamEventSyncFailures = new Map(); // teamEventId -> lastFailedAtMillis
 const TEAM_EVENT_RETRY_COOLDOWN_MS = 5 * 60 * 1000; // don't hammer the Calendar API for events that keep failing
+const teamEventSyncInFlight = new Map(); // teamEventId -> in-progress Promise (prevents duplicate creates)
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -199,40 +200,57 @@ function teamEventSignature(ev) {
 }
 
 async function syncTeamEventToCalendar(ev, { notify }) {
-  const lastFailedAt = teamEventSyncFailures.get(ev.id);
-  if (lastFailedAt && Date.now() - lastFailedAt < TEAM_EVENT_RETRY_COOLDOWN_MS) {
-    return; // recently failed (e.g. API error) — don't hammer the Calendar API every snapshot
+  // The Firestore listener and a direct post-write call (from the IPC handler that just
+  // made the change) can both land here for the same event almost simultaneously. Without
+  // serializing per-id, both would see "no mapping yet" and each create a duplicate Google
+  // Calendar event. Piggyback on any in-flight sync for the same id instead of racing it.
+  if (teamEventSyncInFlight.has(ev.id)) {
+    return teamEventSyncInFlight.get(ev.id);
   }
 
-  const mapping = teamEventMapStore.get(ev.id);
-  const signature = teamEventSignature(ev);
-
-  try {
-    if (!mapping) {
-      const created = await googleAuth.createEvent(config.google, {
-        summary: `👥 ${ev.title}`,
-        start: ev.start,
-        end: ev.end,
-        colorId: TEAM_EVENT_COLOR_ID,
-      });
-      teamEventMapStore.set(ev.id, { googleEventId: created.id, signature });
-      if (notify) {
-        new Notification({ title: '📅 팀 일정 추가', body: `${ev.title} (${ev.createdByName || '관리자'})` }).show();
-      }
-    } else if (mapping.signature !== signature) {
-      await googleAuth.updateEvent(config.google, {
-        eventId: mapping.googleEventId,
-        summary: `👥 ${ev.title}`,
-        start: ev.start,
-        end: ev.end,
-        colorId: TEAM_EVENT_COLOR_ID,
-      });
-      teamEventMapStore.set(ev.id, { googleEventId: mapping.googleEventId, signature });
+  const syncPromise = (async () => {
+    const lastFailedAt = teamEventSyncFailures.get(ev.id);
+    if (lastFailedAt && Date.now() - lastFailedAt < TEAM_EVENT_RETRY_COOLDOWN_MS) {
+      return; // recently failed (e.g. API error) — don't hammer the Calendar API every snapshot
     }
-    teamEventSyncFailures.delete(ev.id);
-  } catch (err) {
-    teamEventSyncFailures.set(ev.id, Date.now());
-    throw err;
+
+    const mapping = teamEventMapStore.get(ev.id);
+    const signature = teamEventSignature(ev);
+
+    try {
+      if (!mapping) {
+        const created = await googleAuth.createEvent(config.google, {
+          summary: `👥 ${ev.title}`,
+          start: ev.start,
+          end: ev.end,
+          colorId: TEAM_EVENT_COLOR_ID,
+        });
+        teamEventMapStore.set(ev.id, { googleEventId: created.id, signature });
+        if (notify) {
+          new Notification({ title: '📅 팀 일정 추가', body: `${ev.title} (${ev.createdByName || '관리자'})` }).show();
+        }
+      } else if (mapping.signature !== signature) {
+        await googleAuth.updateEvent(config.google, {
+          eventId: mapping.googleEventId,
+          summary: `👥 ${ev.title}`,
+          start: ev.start,
+          end: ev.end,
+          colorId: TEAM_EVENT_COLOR_ID,
+        });
+        teamEventMapStore.set(ev.id, { googleEventId: mapping.googleEventId, signature });
+      }
+      teamEventSyncFailures.delete(ev.id);
+    } catch (err) {
+      teamEventSyncFailures.set(ev.id, Date.now());
+      throw err;
+    }
+  })();
+
+  teamEventSyncInFlight.set(ev.id, syncPromise);
+  try {
+    return await syncPromise;
+  } finally {
+    teamEventSyncInFlight.delete(ev.id);
   }
 }
 
