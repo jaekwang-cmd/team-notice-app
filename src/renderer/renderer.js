@@ -503,7 +503,8 @@ function openDayPanel(dateStr) {
   selectedDateStr = dateStr;
   hideEventForm();
   const [y, m, d] = dateStr.split('-').map(Number);
-  dayPanelTitle.textContent = `${y}년 ${m}월 ${d}일`;
+  const holidayName = currentHolidayMap.get(dateStr);
+  dayPanelTitle.textContent = holidayName ? `${y}년 ${m}월 ${d}일 (${holidayName})` : `${y}년 ${m}월 ${d}일`;
 
   if (!isGoogleSignedIn) {
     dayEventList.innerHTML = '<div class="day-event-empty">구글 로그인 후 일정을 볼 수 있어요.</div>';
