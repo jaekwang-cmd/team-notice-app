@@ -1,7 +1,8 @@
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, ipcMain, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, dialog } = require('electron');
 const Store = require('electron-store');
+const { autoUpdater } = require('electron-updater');
 
 const koreanHolidays = require('./src/main/koreanHolidays');
 const googleAuth = require('./src/main/googleAuth');
@@ -114,6 +115,38 @@ function currentUserPayload() {
   };
 }
 
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = false;
+
+  autoUpdater.on('update-available', async (info) => {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '업데이트 확인',
+      message: `새로운 버전(${info.version})이 있습니다. 업데이트 후 실행하시겠습니까?`,
+      buttons: ['업데이트', '나중에'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response === 0) autoUpdater.downloadUpdate();
+  });
+
+  autoUpdater.on('update-downloaded', async () => {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '업데이트 준비 완료',
+      message: '업데이트 다운로드가 완료되었습니다. 지금 재시작하여 적용할까요?',
+      buttons: ['재시작', '나중에'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response === 0) autoUpdater.quitAndInstall();
+  });
+
+  autoUpdater.on('error', (err) => console.error('업데이트 확인 실패:', err));
+
+  autoUpdater.checkForUpdates().catch((err) => console.error('업데이트 확인 실패:', err));
+}
+
 app.whenReady().then(() => {
   createWindow();
 
@@ -121,6 +154,8 @@ app.whenReady().then(() => {
     firebaseHandle = firebaseClient.initFirebase(config.firebase);
     trySignInFirebaseFromStoredGoogleSession();
   }
+
+  if (app.isPackaged) setupAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -6,11 +6,13 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win",
+    "publish": "electron-builder --win --publish always"
   },
   "dependencies": {
     "date-holidays": "^3.23.12",
     "electron-store": "^8.2.0",
+    "electron-updater": "^6.3.9",
     "firebase": "^10.14.1",
     "googleapis": "^144.0.0"
   },
@@ -33,6 +35,11 @@
         "to": "config"
       }
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "jaekwang-cmd",
+      "repo": "team-notice-app"
+    },
     "win": {
       "target": "nsis"
     },
