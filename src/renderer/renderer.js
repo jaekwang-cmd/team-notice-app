@@ -493,7 +493,13 @@ function showEventForm(ev) {
     eventEndTime.value = '10:00';
   }
   eventTimeRow.style.display = eventAlldayCheckbox.checked ? 'none' : 'flex';
-  eventTitleInput.focus();
+
+  // Focusing right after un-hiding (display:none -> visible) can silently no-op
+  // before the browser finishes layout — defer to the next frame so it reliably sticks.
+  requestAnimationFrame(() => {
+    eventTitleInput.focus();
+    eventTitleInput.select();
+  });
 }
 
 function hideEventForm() {
