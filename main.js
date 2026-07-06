@@ -46,6 +46,8 @@ let unsubscribeAdmins = null;
 let unsubscribeTeamEvents = null;
 let teamEventsCache = [];
 let isFirstTeamEventsSnapshot = true;
+const teamEventSyncFailures = new Map(); // teamEventId -> lastFailedAtMillis
+const TEAM_EVENT_RETRY_COOLDOWN_MS = 5 * 60 * 1000; // don't hammer the Calendar API for events that keep failing
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -197,29 +199,40 @@ function teamEventSignature(ev) {
 }
 
 async function syncTeamEventToCalendar(ev, { notify }) {
+  const lastFailedAt = teamEventSyncFailures.get(ev.id);
+  if (lastFailedAt && Date.now() - lastFailedAt < TEAM_EVENT_RETRY_COOLDOWN_MS) {
+    return; // recently failed (e.g. API error) — don't hammer the Calendar API every snapshot
+  }
+
   const mapping = teamEventMapStore.get(ev.id);
   const signature = teamEventSignature(ev);
 
-  if (!mapping) {
-    const created = await googleAuth.createEvent(config.google, {
-      summary: `👥 ${ev.title}`,
-      start: ev.start,
-      end: ev.end,
-      colorId: TEAM_EVENT_COLOR_ID,
-    });
-    teamEventMapStore.set(ev.id, { googleEventId: created.id, signature });
-    if (notify) {
-      new Notification({ title: '📅 팀 일정 추가', body: `${ev.title} (${ev.createdByName || '관리자'})` }).show();
+  try {
+    if (!mapping) {
+      const created = await googleAuth.createEvent(config.google, {
+        summary: `👥 ${ev.title}`,
+        start: ev.start,
+        end: ev.end,
+        colorId: TEAM_EVENT_COLOR_ID,
+      });
+      teamEventMapStore.set(ev.id, { googleEventId: created.id, signature });
+      if (notify) {
+        new Notification({ title: '📅 팀 일정 추가', body: `${ev.title} (${ev.createdByName || '관리자'})` }).show();
+      }
+    } else if (mapping.signature !== signature) {
+      await googleAuth.updateEvent(config.google, {
+        eventId: mapping.googleEventId,
+        summary: `👥 ${ev.title}`,
+        start: ev.start,
+        end: ev.end,
+        colorId: TEAM_EVENT_COLOR_ID,
+      });
+      teamEventMapStore.set(ev.id, { googleEventId: mapping.googleEventId, signature });
     }
-  } else if (mapping.signature !== signature) {
-    await googleAuth.updateEvent(config.google, {
-      eventId: mapping.googleEventId,
-      summary: `👥 ${ev.title}`,
-      start: ev.start,
-      end: ev.end,
-      colorId: TEAM_EVENT_COLOR_ID,
-    });
-    teamEventMapStore.set(ev.id, { googleEventId: mapping.googleEventId, signature });
+    teamEventSyncFailures.delete(ev.id);
+  } catch (err) {
+    teamEventSyncFailures.set(ev.id, Date.now());
+    throw err;
   }
 }
 
@@ -243,6 +256,7 @@ async function handleTeamEventsUpdate(events) {
         }
         teamEventMapStore.delete(prevId);
       }
+      teamEventSyncFailures.delete(prevId);
     }
   }
 
@@ -531,4 +545,5 @@ ipcMain.handle('team-events:delete', async (_e, id) => {
     }
     teamEventMapStore.delete(id);
   }
+  teamEventSyncFailures.delete(id);
 });
