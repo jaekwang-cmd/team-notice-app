@@ -1,0 +1,45 @@
+{
+  "name": "team-notice-app",
+  "version": "0.1.0",
+  "description": "개인 캘린더 + 팀 실시간 공지 데스크톱 앱",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "dependencies": {
+    "date-holidays": "^3.23.12",
+    "electron-store": "^8.2.0",
+    "firebase": "^10.14.1",
+    "googleapis": "^144.0.0"
+  },
+  "devDependencies": {
+    "electron": "^32.1.2",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.teamnotice.app",
+    "productName": "Team Notice",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "config",
+        "to": "config"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    }
+  }
+}
