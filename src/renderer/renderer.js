@@ -46,21 +46,30 @@ async function getHolidays(year) {
 }
 
 async function loadGoogleEventsForGrid(gridStart) {
-  eventsByDate = new Map();
-  if (!isGoogleSignedIn) return;
+  if (!isGoogleSignedIn) {
+    eventsByDate = new Map();
+    return;
+  }
 
   const gridEnd = new Date(gridStart);
   gridEnd.setDate(gridEnd.getDate() + 42);
 
+  // Build into a local map and swap it in atomically at the end — if two calls
+  // race (e.g. one from init() and one from the auth:updated push), reassigning
+  // the shared `eventsByDate` mid-fetch used to make both calls' events land in
+  // the same map, duplicating every entry.
+  const map = new Map();
   try {
     const events = await window.api.googleGetEvents(gridStart.toISOString(), gridEnd.toISOString());
     events.forEach((ev) => {
       const d = ev.start.slice(0, 10);
-      if (!eventsByDate.has(d)) eventsByDate.set(d, []);
-      eventsByDate.get(d).push(ev);
+      if (!map.has(d)) map.set(d, []);
+      map.get(d).push(ev);
     });
+    eventsByDate = map;
   } catch (err) {
     console.error('구글 캘린더 이벤트 로드 실패:', err);
+    eventsByDate = map;
   }
 }
 
