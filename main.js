@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, ipcMain, Notification, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, dialog, Tray, Menu, nativeImage } = require('electron');
 const Store = require('electron-store');
 const { autoUpdater } = require('electron-updater');
 
@@ -32,6 +32,8 @@ const rootAdminEmails = (config.adminEmails || []).map((e) => e.toLowerCase());
 let dynamicAdminEmails = new Set();
 
 let mainWindow;
+let tray = null;
+let isQuitting = false;
 let firebaseHandle = null;
 
 let unsubscribeAnnouncements = null;
@@ -61,6 +63,55 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'renderer', 'index.html'));
+
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
+}
+
+function createTrayIcon() {
+  const size = 16;
+  const buffer = Buffer.alloc(size * size * 4);
+  for (let i = 0; i < size * size; i += 1) {
+    const offset = i * 4;
+    buffer[offset] = 0xff; // B
+    buffer[offset + 1] = 0x8c; // G
+    buffer[offset + 2] = 0x7c; // R  (~#7c8cff accent color, in BGRA order)
+    buffer[offset + 3] = 0xff; // A
+  }
+  return nativeImage.createFromBitmap(buffer, { width: size, height: size });
+}
+
+function createTray() {
+  tray = new Tray(createTrayIcon());
+  tray.setToolTip('Team Notice');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '열기',
+      click: () => {
+        mainWindow.show();
+        mainWindow.focus();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: '종료',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(contextMenu);
+
+  tray.on('click', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
 }
 
 // --- Announcements realtime ---
@@ -299,6 +350,7 @@ function setupAutoUpdater() {
 
 app.whenReady().then(() => {
   createWindow();
+  createTray();
 
   if (!isPlaceholder) {
     firebaseHandle = firebaseClient.initFirebase(config.firebase);
@@ -309,15 +361,20 @@ app.whenReady().then(() => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    else mainWindow.show();
   });
 });
 
-app.on('window-all-closed', () => {
+app.on('before-quit', () => {
+  isQuitting = true;
   stopAnnouncementsSubscription();
   stopAdminsSubscription();
   stopTeamEventsSubscription();
-  if (process.platform !== 'darwin') app.quit();
 });
+
+// Window is hidden (not destroyed) on close, and the tray keeps the process
+// alive — so window-all-closed should no longer quit the app on Windows/Linux.
+app.on('window-all-closed', () => {});
 
 // --- Window controls ---
 ipcMain.handle('window:minimize', () => mainWindow.minimize());
