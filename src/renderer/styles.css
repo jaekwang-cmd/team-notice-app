@@ -5,6 +5,7 @@
   --cell-bg: transparent;
   --app-bg: radial-gradient(circle at 20% 0%, #3a3f8f 0%, #1c1f3a 45%, #0d0e1c 100%);
   --font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+  --event-text-color: #b9e8cc;
 }
 
 * {
@@ -252,7 +253,7 @@ body[data-card-style='3d'] .glass-card {
   width: 100%;
   font-size: 9.5px;
   line-height: 1.35;
-  color: #b9e8cc;
+  color: var(--event-text-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -295,15 +296,16 @@ body[data-card-style='3d'] .glass-card {
   background: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-.notice-card {
-  flex: 1;
-  min-height: 180px;
+.notice-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  padding-right: 16px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
-.notice-card h3 {
+.notice-sidebar h3 {
   font-size: 14px;
   margin-bottom: 10px;
   flex-shrink: 0;
@@ -311,6 +313,7 @@ body[data-card-style='3d'] .glass-card {
 
 .notice-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

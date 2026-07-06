@@ -52,9 +52,9 @@ const teamEventSyncInFlight = new Map(); // teamEventId -> in-progress Promise (
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 980,
+    width: 1320,
     height: 940,
-    minWidth: 880,
+    minWidth: 1220,
     minHeight: 860,
     frame: false,
     backgroundColor: '#161a2b',

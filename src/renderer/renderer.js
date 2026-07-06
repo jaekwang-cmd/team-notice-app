@@ -682,6 +682,7 @@ document.getElementById('settings-save').onclick = async () => {
     cellBg: themeCellBgInput.value,
     text: themeTextInput.value,
     accent: themeAccentInput.value,
+    eventText: themeEventTextInput.value,
     font: themeFontSelect.value || null,
     cardStyle: checkedStyle ? checkedStyle.value : 'glass',
   };
@@ -695,6 +696,7 @@ const themeBgInput = document.getElementById('theme-bg');
 const themeCellBgInput = document.getElementById('theme-cell-bg');
 const themeTextInput = document.getElementById('theme-text');
 const themeAccentInput = document.getElementById('theme-accent');
+const themeEventTextInput = document.getElementById('theme-event-text');
 const themeFontSelect = document.getElementById('theme-font');
 const themeResetBtn = document.getElementById('theme-reset');
 
@@ -703,6 +705,7 @@ const DEFAULT_THEME_INPUTS = {
   cellBg: '#20233d',
   text: '#eef0fa',
   accent: '#7c8cff',
+  eventText: '#b9e8cc',
   font: '',
 };
 
@@ -711,6 +714,7 @@ function fillThemeInputs(theme) {
   themeCellBgInput.value = theme.cellBg || DEFAULT_THEME_INPUTS.cellBg;
   themeTextInput.value = theme.text || DEFAULT_THEME_INPUTS.text;
   themeAccentInput.value = theme.accent || DEFAULT_THEME_INPUTS.accent;
+  themeEventTextInput.value = theme.eventText || DEFAULT_THEME_INPUTS.eventText;
   themeFontSelect.value = theme.font || '';
   const style = theme.cardStyle || 'glass';
   const radio = document.querySelector(`input[name="card-style"][value="${style}"]`);
@@ -744,6 +748,9 @@ function applyTheme(theme) {
     root.removeProperty('--accent');
     root.removeProperty('--accent-2');
   }
+
+  if (theme.eventText) root.setProperty('--event-text-color', theme.eventText);
+  else root.removeProperty('--event-text-color');
 
   if (theme.font) root.setProperty('--font-family', theme.font);
   else root.removeProperty('--font-family');

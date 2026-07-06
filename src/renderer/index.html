@@ -23,6 +23,15 @@
     <div class="content">
       <section class="glass-card calendar-card">
         <div class="calendar-row">
+          <div class="notice-sidebar">
+            <h3>📢 팀 공지</h3>
+            <div class="notice-list" id="notice-list"></div>
+            <div class="notice-input">
+              <input id="notice-text" type="text" placeholder="공지를 입력하세요..." maxlength="500" />
+              <button id="notice-send">보내기</button>
+            </div>
+          </div>
+
           <div class="calendar-main">
             <div class="calendar-header">
               <button id="prev-month" class="nav-btn">‹</button>
@@ -73,15 +82,6 @@
           </div>
         </div>
       </section>
-
-      <section class="glass-card notice-card">
-        <h3>📢 팀 공지</h3>
-        <div class="notice-list" id="notice-list"></div>
-        <div class="notice-input">
-          <input id="notice-text" type="text" placeholder="공지를 입력하세요..." maxlength="500" />
-          <button id="notice-send">보내기</button>
-        </div>
-      </section>
     </div>
   </div>
 
@@ -110,6 +110,10 @@
       <div class="theme-row">
         <span>강조 색상</span>
         <input type="color" id="theme-accent" />
+      </div>
+      <div class="theme-row">
+        <span>일정 미리보기 글씨 색상</span>
+        <input type="color" id="theme-event-text" />
       </div>
       <div class="theme-row">
         <span>글씨체</span>
