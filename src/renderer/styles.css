@@ -530,6 +530,8 @@ body[data-card-style='3d'] .glass-card {
 #settings-panel {
   --color-app-bg: #eef0f4;
   --color-panel-bg: #f6f7f9;
+  --color-panel-tint-light: #ffffff;
+  --color-panel-tint-dark: #eef0f4;
   --color-calendar-bg: #eef0f4;
   --color-text-primary: #2b2f38;
   --color-text-secondary: #6b7280;
@@ -543,8 +545,15 @@ body[data-card-style='3d'] .glass-card {
   --color-secondary-button-bg: #e4e5f4;
 }
 
+/* Settings dialog always renders as the plain glass-block style, regardless
+   of the card-style radio the user has live-selected for the app itself. */
 #settings-panel .glass-card {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  background: color-mix(in srgb, var(--color-panel-bg) 60%, transparent) !important;
+  backdrop-filter: blur(30px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(160%) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--color-border) !important;
 }
 
 .settings-card {
@@ -555,16 +564,37 @@ body[data-card-style='3d'] .glass-card {
 
 .theme-advanced summary {
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
-  opacity: 0.85;
-  margin: 18px 0 10px;
-  padding-top: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-accent);
+  margin: 18px 0 4px;
+  padding: 8px 8px 8px 4px;
   border-top: 1px solid var(--color-divider);
+  border-radius: 8px;
+  list-style: none;
+}
+
+.theme-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.theme-advanced summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 0.15s ease;
+}
+
+.theme-advanced[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.theme-advanced summary:hover {
+  background: var(--color-input-bg);
 }
 
 .theme-advanced[open] summary {
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .settings-card h3 {
@@ -635,12 +665,14 @@ body[data-card-style='3d'] .glass-card {
 
 .theme-section-title {
   margin-top: 18px;
-  margin-bottom: 10px;
-  font-size: 13px;
+  margin-bottom: 8px;
+  font-size: 12px;
   font-weight: 700;
-  opacity: 0.85;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
   border-top: 1px solid var(--color-divider);
-  padding-top: 12px;
+  padding-top: 14px;
 }
 
 .theme-section-title:first-of-type {
@@ -652,18 +684,26 @@ body[data-card-style='3d'] .glass-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 10px;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  margin-bottom: 2px;
+  transition: background 0.12s ease;
+}
+
+.theme-row:hover {
+  background: var(--color-input-bg);
 }
 
 .theme-row input[type='color'] {
-  width: 36px;
-  height: 24px;
-  border: none;
-  border-radius: 6px;
+  width: 40px;
+  height: 26px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
   background: none;
   cursor: pointer;
   padding: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .theme-row select {
