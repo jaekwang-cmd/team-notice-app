@@ -784,18 +784,34 @@ function fillThemeInputs(theme) {
 }
 
 function darkenHex(hex, amount) {
+  return shadeHex(hex, -amount);
+}
+
+// positive amount lightens, negative darkens (clamped to the 0-255 range per channel)
+function shadeHex(hex, amount) {
   const num = parseInt(hex.replace('#', ''), 16);
-  const r = Math.max(0, (num >> 16) - amount);
-  const g = Math.max(0, ((num >> 8) & 0xff) - amount);
-  const b = Math.max(0, (num & 0xff) - amount);
+  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amount));
+  const b = Math.min(255, Math.max(0, (num & 0xff) + amount));
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
 
 function applyTheme(theme) {
   const root = document.documentElement.style;
 
-  if (theme.bg) root.setProperty('--app-bg', theme.bg);
-  else root.removeProperty('--app-bg');
+  if (theme.bg) {
+    root.setProperty('--app-bg', theme.bg);
+    // matte/3d card styles are opaque (no blur), so they need their own
+    // theme-derived shades instead of just blurring whatever is behind them.
+    root.setProperty('--card-tint', theme.bg);
+    root.setProperty('--card-tint-light', shadeHex(theme.bg, 40));
+    root.setProperty('--card-tint-dark', shadeHex(theme.bg, -40));
+  } else {
+    root.removeProperty('--app-bg');
+    root.removeProperty('--card-tint');
+    root.removeProperty('--card-tint-light');
+    root.removeProperty('--card-tint-dark');
+  }
 
   if (theme.cellBg) root.setProperty('--cell-bg', theme.cellBg);
   else root.removeProperty('--cell-bg');
