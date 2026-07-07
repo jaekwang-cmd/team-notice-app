@@ -779,13 +779,17 @@ function fillColorInputsFromPreset(preset) {
 }
 
 function fillThemeInputs(theme) {
+  // fall back to the SAME mode's defaults, not always dark — otherwise a
+  // light-themed user with an older save (missing newer fields) gets a
+  // mismatched dark/light color clash for whatever fields weren't saved yet.
+  const defaults = THEME_PRESETS[theme.mode] || DARK_DEFAULTS;
   COLOR_FIELDS.forEach((f) => {
     const el = document.getElementById(f.id);
-    if (el) el.value = theme[f.key] || DARK_DEFAULTS[f.key];
+    if (el) el.value = theme[f.key] || defaults[f.key];
   });
   themeFontSelect.value = theme.font || '';
-  themeDateFontSizeSelect.value = theme.dateFontSize || DARK_DEFAULTS.dateFontSize;
-  themeEventFontSizeSelect.value = theme.eventFontSize || DARK_DEFAULTS.eventFontSize;
+  themeDateFontSizeSelect.value = theme.dateFontSize || defaults.dateFontSize;
+  themeEventFontSizeSelect.value = theme.eventFontSize || defaults.eventFontSize;
   themeBoldCheckbox.checked = Boolean(theme.bold);
 
   const style = theme.cardStyle || 'glass';
