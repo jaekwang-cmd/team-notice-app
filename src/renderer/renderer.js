@@ -703,7 +703,11 @@ const themeTextInput = document.getElementById('theme-text');
 const themeAccentInput = document.getElementById('theme-accent');
 const themeEventTextInput = document.getElementById('theme-event-text');
 const themeFontSelect = document.getElementById('theme-font');
+const themeFontSizeSelect = document.getElementById('theme-font-size');
+const themeBoldCheckbox = document.getElementById('theme-bold');
 const themeResetBtn = document.getElementById('theme-reset');
+
+const UI_SCALE_BY_FONT_SIZE = { normal: 1, large: 1.1, xlarge: 1.2 };
 
 const DEFAULT_THEME_INPUTS = {
   bg: '#1c1f3a',
@@ -737,6 +741,8 @@ function currentThemeFromForm() {
     accent: themeAccentInput.value,
     eventText: themeEventTextInput.value,
     font: themeFontSelect.value || null,
+    fontSize: themeFontSizeSelect.value || 'normal',
+    bold: themeBoldCheckbox.checked,
     cardStyle: checkedStyle ? checkedStyle.value : 'glass',
   };
 }
@@ -757,6 +763,8 @@ document.querySelectorAll('input[name="card-style"]').forEach((radio) => {
   input.addEventListener('input', () => applyTheme(currentThemeFromForm()));
 });
 themeFontSelect.addEventListener('change', () => applyTheme(currentThemeFromForm()));
+themeFontSizeSelect.addEventListener('change', () => applyTheme(currentThemeFromForm()));
+themeBoldCheckbox.addEventListener('change', () => applyTheme(currentThemeFromForm()));
 
 function fillColorInputs(colors) {
   themeBgInput.value = colors.bg;
@@ -773,6 +781,8 @@ function fillThemeInputs(theme) {
   themeAccentInput.value = theme.accent || DEFAULT_THEME_INPUTS.accent;
   themeEventTextInput.value = theme.eventText || DEFAULT_THEME_INPUTS.eventText;
   themeFontSelect.value = theme.font || '';
+  themeFontSizeSelect.value = theme.fontSize || 'normal';
+  themeBoldCheckbox.checked = Boolean(theme.bold);
 
   const style = theme.cardStyle || 'glass';
   const styleRadio = document.querySelector(`input[name="card-style"][value="${style}"]`);
@@ -833,6 +843,8 @@ function applyTheme(theme) {
   if (theme.font) root.setProperty('--font-family', theme.font);
   else root.removeProperty('--font-family');
 
+  root.setProperty('--ui-scale', UI_SCALE_BY_FONT_SIZE[theme.fontSize] || 1);
+  document.body.setAttribute('data-bold', theme.bold ? 'true' : 'false');
   document.body.setAttribute('data-card-style', theme.cardStyle || 'glass');
 }
 
