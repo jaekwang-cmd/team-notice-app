@@ -697,99 +697,95 @@ document.getElementById('settings-save').onclick = async () => {
 };
 
 // --- Theme customization ---
-const themeBgInput = document.getElementById('theme-bg');
-const themeCellBgInput = document.getElementById('theme-cell-bg');
-const themeTextInput = document.getElementById('theme-text');
-const themeAccentInput = document.getElementById('theme-accent');
-const themeEventTextInput = document.getElementById('theme-event-text');
-const themeBorderInput = document.getElementById('theme-border');
+// Each entry drives its color picker, its CSS custom property, and (via the
+// dark/light preset objects below) its two default palettes — one place to
+// edit instead of five parallel lists, so adding a color stays a one-liner.
+const COLOR_FIELDS = [
+  { key: 'bg', id: 'theme-bg', cssVar: '--color-app-bg' },
+  { key: 'panelBg', id: 'theme-panel-bg', cssVar: '--color-panel-bg', shadeVars: ['--color-panel-tint-light', '--color-panel-tint-dark'] },
+  { key: 'accent', id: 'theme-accent', cssVar: '--color-accent', shadeVars: ['--color-accent-2'] },
+  { key: 'border', id: 'theme-border', cssVar: '--color-border' },
+  { key: 'divider', id: 'theme-divider', cssVar: '--color-divider' },
+  { key: 'calendarBg', id: 'theme-calendar-bg', cssVar: '--color-calendar-bg' },
+  { key: 'cellBg', id: 'theme-cell-bg', cssVar: '--color-day-cell-bg' },
+  { key: 'cellHover', id: 'theme-cell-hover', cssVar: '--color-day-cell-hover' },
+  { key: 'selectedDay', id: 'theme-selected-day', cssVar: '--color-selected-day-bg' },
+  { key: 'today', id: 'theme-today', cssVar: '--color-today-bg' },
+  { key: 'mutedDate', id: 'theme-muted-date', cssVar: '--color-muted-date' },
+  { key: 'sunday', id: 'theme-sunday', cssVar: '--color-sunday' },
+  { key: 'saturday', id: 'theme-saturday', cssVar: '--color-saturday' },
+  { key: 'eventBg', id: 'theme-event-bg', cssVar: '--color-event-bg' },
+  { key: 'eventBorder', id: 'theme-event-border', cssVar: '--color-event-border' },
+  { key: 'eventText', id: 'theme-event-text', cssVar: '--color-event-text' },
+  { key: 'inputBg', id: 'theme-input-bg', cssVar: '--color-input-bg' },
+  { key: 'buttonBg', id: 'theme-button-bg', cssVar: '--color-button-bg' },
+  { key: 'buttonText', id: 'theme-button-text', cssVar: '--color-button-text' },
+  { key: 'secondaryButtonBg', id: 'theme-secondary-button-bg', cssVar: '--color-secondary-button-bg' },
+  { key: 'text', id: 'theme-text', cssVar: '--color-text-primary' },
+  { key: 'textSecondary', id: 'theme-text-secondary', cssVar: '--color-text-secondary' },
+];
+
+const DARK_DEFAULTS = {
+  bg: '#1c1f3a', panelBg: '#262a48', accent: '#7c8cff', border: '#ffffff', divider: '#ffffff',
+  calendarBg: '#1c1f3a', cellBg: '#20233d', cellHover: '#2a2e4d', selectedDay: '#3a3f7a', today: '#33395c',
+  mutedDate: '#6b7094', sunday: '#ff8f8f', saturday: '#8fb4ff',
+  eventBg: '#20233d', eventBorder: '#7ce2b0', eventText: '#b9e8cc',
+  inputBg: '#262a48', buttonBg: '#7c8cff', buttonText: '#ffffff', secondaryButtonBg: '#3a3f7a',
+  text: '#eef0fa', textSecondary: '#b7bfe6',
+  font: '', dateFontSize: '11', eventFontSize: '9',
+};
+
+const LIGHT_DEFAULTS = {
+  bg: '#f2f4f8', panelBg: '#f7f8fb', accent: '#6366be', border: '#dce1e8', divider: '#e2e8f0',
+  calendarBg: '#f1f3f7', cellBg: '#f9fafc', cellHover: '#eef2ff', selectedDay: '#d8dcf5', today: '#e0f2fe',
+  mutedDate: '#cbd5e1', sunday: '#f87171', saturday: '#60a5fa',
+  eventBg: '#eef2ff', eventBorder: '#c7d2fe', eventText: '#2d3764',
+  inputBg: '#ffffff', buttonBg: '#4f46e5', buttonText: '#ffffff', secondaryButtonBg: '#e0e2f7',
+  text: '#1e293b', textSecondary: '#64748b',
+  font: '', dateFontSize: '11', eventFontSize: '9',
+};
+
+const THEME_PRESETS = { dark: DARK_DEFAULTS, light: LIGHT_DEFAULTS };
+
 const themeFontSelect = document.getElementById('theme-font');
-const themeFontSizeSelect = document.getElementById('theme-font-size');
+const themeDateFontSizeSelect = document.getElementById('theme-date-font-size');
+const themeEventFontSizeSelect = document.getElementById('theme-event-font-size');
 const themeBoldCheckbox = document.getElementById('theme-bold');
 const themeResetBtn = document.getElementById('theme-reset');
-
-const UI_SCALE_BY_FONT_SIZE = { normal: 1, large: 1.1, xlarge: 1.2 };
-
-const DEFAULT_THEME_INPUTS = {
-  bg: '#1c1f3a',
-  cellBg: '#20233d',
-  text: '#eef0fa',
-  accent: '#7c8cff',
-  eventText: '#b9e8cc',
-  border: '#ffffff',
-  font: '',
-};
-
-const THEME_PRESETS = {
-  dark: DEFAULT_THEME_INPUTS,
-  light: {
-    bg: '#f4f5fa',
-    cellBg: '#ffffff',
-    text: '#20232b',
-    accent: '#5865f2',
-    eventText: '#1f8a5c',
-    border: '#20232b',
-    font: '',
-  },
-};
 
 function currentThemeFromForm() {
   const checkedStyle = document.querySelector('input[name="card-style"]:checked');
   const checkedMode = document.querySelector('input[name="theme-mode"]:checked');
-  return {
+  const theme = {
     mode: checkedMode ? checkedMode.value : 'dark',
-    bg: themeBgInput.value,
-    cellBg: themeCellBgInput.value,
-    text: themeTextInput.value,
-    accent: themeAccentInput.value,
-    eventText: themeEventTextInput.value,
-    border: themeBorderInput.value,
-    font: themeFontSelect.value || null,
-    fontSize: themeFontSizeSelect.value || 'normal',
-    bold: themeBoldCheckbox.checked,
     cardStyle: checkedStyle ? checkedStyle.value : 'glass',
+    font: themeFontSelect.value || null,
+    dateFontSize: themeDateFontSizeSelect.value,
+    eventFontSize: themeEventFontSizeSelect.value,
+    bold: themeBoldCheckbox.checked,
   };
+  COLOR_FIELDS.forEach((f) => {
+    const el = document.getElementById(f.id);
+    if (el) theme[f.key] = el.value;
+  });
+  return theme;
 }
 
-document.querySelectorAll('input[name="theme-mode"]').forEach((radio) => {
-  radio.addEventListener('change', () => {
-    const preset = THEME_PRESETS[radio.value];
-    if (radio.checked && preset) fillColorInputs(preset);
-    applyTheme(currentThemeFromForm()); // live preview, independent of Save
+function fillColorInputsFromPreset(preset) {
+  COLOR_FIELDS.forEach((f) => {
+    const el = document.getElementById(f.id);
+    if (el && preset[f.key]) el.value = preset[f.key];
   });
-});
-
-document.querySelectorAll('input[name="card-style"]').forEach((radio) => {
-  radio.addEventListener('change', () => applyTheme(currentThemeFromForm()));
-});
-
-[themeBgInput, themeCellBgInput, themeTextInput, themeAccentInput, themeEventTextInput, themeBorderInput].forEach(
-  (input) => {
-    input.addEventListener('input', () => applyTheme(currentThemeFromForm()));
-  }
-);
-themeFontSelect.addEventListener('change', () => applyTheme(currentThemeFromForm()));
-themeFontSizeSelect.addEventListener('change', () => applyTheme(currentThemeFromForm()));
-themeBoldCheckbox.addEventListener('change', () => applyTheme(currentThemeFromForm()));
-
-function fillColorInputs(colors) {
-  themeBgInput.value = colors.bg;
-  themeCellBgInput.value = colors.cellBg;
-  themeTextInput.value = colors.text;
-  themeAccentInput.value = colors.accent;
-  themeEventTextInput.value = colors.eventText;
-  themeBorderInput.value = colors.border;
 }
 
 function fillThemeInputs(theme) {
-  themeBgInput.value = theme.bg || DEFAULT_THEME_INPUTS.bg;
-  themeCellBgInput.value = theme.cellBg || DEFAULT_THEME_INPUTS.cellBg;
-  themeTextInput.value = theme.text || DEFAULT_THEME_INPUTS.text;
-  themeAccentInput.value = theme.accent || DEFAULT_THEME_INPUTS.accent;
-  themeEventTextInput.value = theme.eventText || DEFAULT_THEME_INPUTS.eventText;
-  themeBorderInput.value = theme.border || DEFAULT_THEME_INPUTS.border;
+  COLOR_FIELDS.forEach((f) => {
+    const el = document.getElementById(f.id);
+    if (el) el.value = theme[f.key] || DARK_DEFAULTS[f.key];
+  });
   themeFontSelect.value = theme.font || '';
-  themeFontSizeSelect.value = theme.fontSize || 'normal';
+  themeDateFontSizeSelect.value = theme.dateFontSize || DARK_DEFAULTS.dateFontSize;
+  themeEventFontSizeSelect.value = theme.eventFontSize || DARK_DEFAULTS.eventFontSize;
   themeBoldCheckbox.checked = Boolean(theme.bold);
 
   const style = theme.cardStyle || 'glass';
@@ -801,9 +797,26 @@ function fillThemeInputs(theme) {
   if (modeRadio) modeRadio.checked = true;
 }
 
-function darkenHex(hex, amount) {
-  return shadeHex(hex, -amount);
-}
+document.querySelectorAll('input[name="theme-mode"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    const preset = THEME_PRESETS[radio.value];
+    if (radio.checked && preset) fillColorInputsFromPreset(preset);
+    applyTheme(currentThemeFromForm()); // live preview, independent of Save
+  });
+});
+
+document.querySelectorAll('input[name="card-style"]').forEach((radio) => {
+  radio.addEventListener('change', () => applyTheme(currentThemeFromForm()));
+});
+
+COLOR_FIELDS.forEach((f) => {
+  const el = document.getElementById(f.id);
+  if (el) el.addEventListener('input', () => applyTheme(currentThemeFromForm()));
+});
+[themeFontSelect, themeDateFontSizeSelect, themeEventFontSizeSelect].forEach((el) => {
+  el.addEventListener('change', () => applyTheme(currentThemeFromForm()));
+});
+themeBoldCheckbox.addEventListener('change', () => applyTheme(currentThemeFromForm()));
 
 // positive amount lightens, negative darkens (clamped to the 0-255 range per channel)
 function shadeHex(hex, amount) {
@@ -817,44 +830,27 @@ function shadeHex(hex, amount) {
 function applyTheme(theme) {
   const root = document.documentElement.style;
 
-  if (theme.bg) {
-    root.setProperty('--app-bg', theme.bg);
-    // matte/3d card styles are opaque (no blur), so they need their own
-    // theme-derived shades instead of just blurring whatever is behind them.
-    root.setProperty('--card-tint', theme.bg);
-    root.setProperty('--card-tint-light', shadeHex(theme.bg, 40));
-    root.setProperty('--card-tint-dark', shadeHex(theme.bg, -40));
-  } else {
-    root.removeProperty('--app-bg');
-    root.removeProperty('--card-tint');
-    root.removeProperty('--card-tint-light');
-    root.removeProperty('--card-tint-dark');
-  }
-
-  if (theme.cellBg) root.setProperty('--cell-bg', theme.cellBg);
-  else root.removeProperty('--cell-bg');
-
-  if (theme.text) root.setProperty('--text-color', theme.text);
-  else root.removeProperty('--text-color');
-
-  if (theme.accent) {
-    root.setProperty('--accent', theme.accent);
-    root.setProperty('--accent-2', darkenHex(theme.accent, 40));
-  } else {
-    root.removeProperty('--accent');
-    root.removeProperty('--accent-2');
-  }
-
-  if (theme.eventText) root.setProperty('--event-text-color', theme.eventText);
-  else root.removeProperty('--event-text-color');
-
-  if (theme.border) root.setProperty('--border-color', theme.border);
-  else root.removeProperty('--border-color');
+  COLOR_FIELDS.forEach((f) => {
+    const value = theme[f.key];
+    if (value) {
+      root.setProperty(f.cssVar, value);
+      if (f.shadeVars) {
+        // one shade lighter, one shade darker — enough for a gradient or a hover/active tint
+        root.setProperty(f.shadeVars[0], shadeHex(value, 40));
+        if (f.shadeVars[1]) root.setProperty(f.shadeVars[1], shadeHex(value, -40));
+      }
+    } else {
+      root.removeProperty(f.cssVar);
+      (f.shadeVars || []).forEach((v) => root.removeProperty(v));
+    }
+  });
 
   if (theme.font) root.setProperty('--font-family', theme.font);
   else root.removeProperty('--font-family');
 
-  root.setProperty('--ui-scale', UI_SCALE_BY_FONT_SIZE[theme.fontSize] || 1);
+  root.setProperty('--calendar-date-font-size', `${theme.dateFontSize || DARK_DEFAULTS.dateFontSize}px`);
+  root.setProperty('--calendar-event-font-size', `${theme.eventFontSize || DARK_DEFAULTS.eventFontSize}px`);
+
   document.body.setAttribute('data-bold', theme.bold ? 'true' : 'false');
   document.body.setAttribute('data-card-style', theme.cardStyle || 'glass');
 }

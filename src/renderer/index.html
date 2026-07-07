@@ -105,29 +105,111 @@
         <label><input type="radio" name="theme-mode" value="custom" /> 사용자 설정</label>
       </div>
 
+      <div class="theme-row style-row">
+        <span>카드 스타일</span>
+      </div>
+      <div class="style-options">
+        <label><input type="radio" name="card-style" value="glass" /> 유리블록</label>
+        <label><input type="radio" name="card-style" value="matte" /> 매트</label>
+        <label><input type="radio" name="card-style" value="3d" /> 입체</label>
+      </div>
+
+      <h3 class="theme-section-title">① 기본 색상</h3>
       <div class="theme-row">
         <span>전체 배경색</span>
         <input type="color" id="theme-bg" />
       </div>
       <div class="theme-row">
-        <span>날짜 칸 배경색</span>
-        <input type="color" id="theme-cell-bg" />
-      </div>
-      <div class="theme-row">
-        <span>글씨 색상</span>
-        <input type="color" id="theme-text" />
+        <span>패널 배경색</span>
+        <input type="color" id="theme-panel-bg" />
       </div>
       <div class="theme-row">
         <span>강조 색상</span>
         <input type="color" id="theme-accent" />
       </div>
       <div class="theme-row">
+        <span>테두리 색상</span>
+        <input type="color" id="theme-border" />
+      </div>
+      <div class="theme-row">
+        <span>구분선 색상</span>
+        <input type="color" id="theme-divider" />
+      </div>
+
+      <h3 class="theme-section-title">② 캘린더 색상</h3>
+      <div class="theme-row">
+        <span>캘린더 영역 배경색</span>
+        <input type="color" id="theme-calendar-bg" />
+      </div>
+      <div class="theme-row">
+        <span>날짜 칸 배경색</span>
+        <input type="color" id="theme-cell-bg" />
+      </div>
+      <div class="theme-row">
+        <span>날짜 칸 Hover 색상</span>
+        <input type="color" id="theme-cell-hover" />
+      </div>
+      <div class="theme-row">
+        <span>선택 날짜 배경색</span>
+        <input type="color" id="theme-selected-day" />
+      </div>
+      <div class="theme-row">
+        <span>오늘 날짜 배경색</span>
+        <input type="color" id="theme-today" />
+      </div>
+      <div class="theme-row">
+        <span>이전/다음 달 날짜 색상</span>
+        <input type="color" id="theme-muted-date" />
+      </div>
+      <div class="theme-row">
+        <span>일요일 색상</span>
+        <input type="color" id="theme-sunday" />
+      </div>
+      <div class="theme-row">
+        <span>토요일 색상</span>
+        <input type="color" id="theme-saturday" />
+      </div>
+
+      <h3 class="theme-section-title">③ 일정 색상</h3>
+      <div class="theme-row">
+        <span>일정 카드 배경색</span>
+        <input type="color" id="theme-event-bg" />
+      </div>
+      <div class="theme-row">
+        <span>일정 카드 테두리 색상</span>
+        <input type="color" id="theme-event-border" />
+      </div>
+      <div class="theme-row">
         <span>일정 미리보기 글씨 색상</span>
         <input type="color" id="theme-event-text" />
       </div>
+
+      <h3 class="theme-section-title">④ 입력/버튼 색상</h3>
       <div class="theme-row">
-        <span>테두리 색상</span>
-        <input type="color" id="theme-border" />
+        <span>입력창 배경색</span>
+        <input type="color" id="theme-input-bg" />
+      </div>
+      <div class="theme-row">
+        <span>버튼 배경색</span>
+        <input type="color" id="theme-button-bg" />
+      </div>
+      <div class="theme-row">
+        <span>버튼 글씨 색상</span>
+        <input type="color" id="theme-button-text" />
+      </div>
+      <div class="theme-row">
+        <span>보조 버튼 배경색</span>
+        <input type="color" id="theme-secondary-button-bg" />
+      </div>
+
+      <h3 class="theme-section-title">⑤ 텍스트 색상</h3>
+      <div class="theme-row">
+        <span>글씨 색상</span>
+        <input type="color" id="theme-text" />
+      </div>
+      <div class="theme-row">
+        <span>보조 텍스트 색상</span>
+        <input type="color" id="theme-text-secondary" />
       </div>
       <div class="theme-row">
         <span>글씨체</span>
@@ -141,26 +223,31 @@
         </select>
       </div>
       <div class="theme-row">
-        <span>글씨 크기</span>
-        <select id="theme-font-size">
-          <option value="normal">기본</option>
-          <option value="large">크게</option>
-          <option value="xlarge">아주 크게</option>
+        <span>날짜 숫자 크기</span>
+        <select id="theme-date-font-size">
+          <option value="10">10px</option>
+          <option value="11">11px</option>
+          <option value="12">12px</option>
+          <option value="13">13px</option>
+          <option value="14">14px</option>
+          <option value="15">15px</option>
+          <option value="16">16px</option>
+        </select>
+      </div>
+      <div class="theme-row">
+        <span>일정 글씨 크기</span>
+        <select id="theme-event-font-size">
+          <option value="8">8px</option>
+          <option value="9">9px</option>
+          <option value="10">10px</option>
+          <option value="11">11px</option>
+          <option value="12">12px</option>
         </select>
       </div>
       <label class="toggle-row small">
         <span>글씨 굵게</span>
         <input type="checkbox" id="theme-bold" />
       </label>
-
-      <div class="theme-row style-row">
-        <span>카드 스타일</span>
-      </div>
-      <div class="style-options">
-        <label><input type="radio" name="card-style" value="glass" /> 유리블록</label>
-        <label><input type="radio" name="card-style" value="matte" /> 매트</label>
-        <label><input type="radio" name="card-style" value="3d" /> 입체</label>
-      </div>
 
       <button id="theme-reset" class="theme-reset-btn">기본값으로 초기화</button>
 
