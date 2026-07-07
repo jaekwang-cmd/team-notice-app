@@ -648,9 +648,12 @@ const adminSection = document.getElementById('admin-section');
 const rootAdminList = document.getElementById('root-admin-list');
 const adminEmailsInput = document.getElementById('admin-emails-input');
 
+let lastSavedTheme = {};
+
 document.getElementById('btn-settings').onclick = async () => {
   autostartToggle.checked = await window.api.getAutostart();
   const theme = await window.api.getTheme();
+  lastSavedTheme = theme;
   fillThemeInputs(theme);
 
   if (currentUser.isAdmin) {
@@ -679,23 +682,16 @@ document.getElementById('admin-save-btn').onclick = async () => {
   }
 };
 
-document.getElementById('settings-close').onclick = () => settingsPanel.classList.add('hidden');
+document.getElementById('settings-close').onclick = () => {
+  applyTheme(lastSavedTheme); // discard any unsaved live-preview changes
+  settingsPanel.classList.add('hidden');
+};
 
 document.getElementById('settings-save').onclick = async () => {
   await window.api.setAutostart(autostartToggle.checked);
-  const checkedStyle = document.querySelector('input[name="card-style"]:checked');
-  const checkedMode = document.querySelector('input[name="theme-mode"]:checked');
-  const theme = {
-    mode: checkedMode ? checkedMode.value : 'dark',
-    bg: themeBgInput.value,
-    cellBg: themeCellBgInput.value,
-    text: themeTextInput.value,
-    accent: themeAccentInput.value,
-    eventText: themeEventTextInput.value,
-    font: themeFontSelect.value || null,
-    cardStyle: checkedStyle ? checkedStyle.value : 'glass',
-  };
+  const theme = currentThemeFromForm();
   await window.api.setTheme(theme);
+  lastSavedTheme = theme;
   applyTheme(theme);
   settingsPanel.classList.add('hidden');
 };
@@ -730,12 +726,37 @@ const THEME_PRESETS = {
   },
 };
 
+function currentThemeFromForm() {
+  const checkedStyle = document.querySelector('input[name="card-style"]:checked');
+  const checkedMode = document.querySelector('input[name="theme-mode"]:checked');
+  return {
+    mode: checkedMode ? checkedMode.value : 'dark',
+    bg: themeBgInput.value,
+    cellBg: themeCellBgInput.value,
+    text: themeTextInput.value,
+    accent: themeAccentInput.value,
+    eventText: themeEventTextInput.value,
+    font: themeFontSelect.value || null,
+    cardStyle: checkedStyle ? checkedStyle.value : 'glass',
+  };
+}
+
 document.querySelectorAll('input[name="theme-mode"]').forEach((radio) => {
   radio.addEventListener('change', () => {
     const preset = THEME_PRESETS[radio.value];
     if (radio.checked && preset) fillColorInputs(preset);
+    applyTheme(currentThemeFromForm()); // live preview, independent of Save
   });
 });
+
+document.querySelectorAll('input[name="card-style"]').forEach((radio) => {
+  radio.addEventListener('change', () => applyTheme(currentThemeFromForm()));
+});
+
+[themeBgInput, themeCellBgInput, themeTextInput, themeAccentInput, themeEventTextInput].forEach((input) => {
+  input.addEventListener('input', () => applyTheme(currentThemeFromForm()));
+});
+themeFontSelect.addEventListener('change', () => applyTheme(currentThemeFromForm()));
 
 function fillColorInputs(colors) {
   themeBgInput.value = colors.bg;
@@ -801,6 +822,7 @@ function applyTheme(theme) {
 
 themeResetBtn.onclick = async () => {
   await window.api.setTheme({});
+  lastSavedTheme = {};
   applyTheme({});
   fillThemeInputs({});
 };
