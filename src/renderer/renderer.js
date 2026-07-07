@@ -702,6 +702,7 @@ const themeCellBgInput = document.getElementById('theme-cell-bg');
 const themeTextInput = document.getElementById('theme-text');
 const themeAccentInput = document.getElementById('theme-accent');
 const themeEventTextInput = document.getElementById('theme-event-text');
+const themeBorderInput = document.getElementById('theme-border');
 const themeFontSelect = document.getElementById('theme-font');
 const themeFontSizeSelect = document.getElementById('theme-font-size');
 const themeBoldCheckbox = document.getElementById('theme-bold');
@@ -715,6 +716,7 @@ const DEFAULT_THEME_INPUTS = {
   text: '#eef0fa',
   accent: '#7c8cff',
   eventText: '#b9e8cc',
+  border: '#ffffff',
   font: '',
 };
 
@@ -726,6 +728,7 @@ const THEME_PRESETS = {
     text: '#20232b',
     accent: '#5865f2',
     eventText: '#1f8a5c',
+    border: '#20232b',
     font: '',
   },
 };
@@ -740,6 +743,7 @@ function currentThemeFromForm() {
     text: themeTextInput.value,
     accent: themeAccentInput.value,
     eventText: themeEventTextInput.value,
+    border: themeBorderInput.value,
     font: themeFontSelect.value || null,
     fontSize: themeFontSizeSelect.value || 'normal',
     bold: themeBoldCheckbox.checked,
@@ -759,9 +763,11 @@ document.querySelectorAll('input[name="card-style"]').forEach((radio) => {
   radio.addEventListener('change', () => applyTheme(currentThemeFromForm()));
 });
 
-[themeBgInput, themeCellBgInput, themeTextInput, themeAccentInput, themeEventTextInput].forEach((input) => {
-  input.addEventListener('input', () => applyTheme(currentThemeFromForm()));
-});
+[themeBgInput, themeCellBgInput, themeTextInput, themeAccentInput, themeEventTextInput, themeBorderInput].forEach(
+  (input) => {
+    input.addEventListener('input', () => applyTheme(currentThemeFromForm()));
+  }
+);
 themeFontSelect.addEventListener('change', () => applyTheme(currentThemeFromForm()));
 themeFontSizeSelect.addEventListener('change', () => applyTheme(currentThemeFromForm()));
 themeBoldCheckbox.addEventListener('change', () => applyTheme(currentThemeFromForm()));
@@ -772,6 +778,7 @@ function fillColorInputs(colors) {
   themeTextInput.value = colors.text;
   themeAccentInput.value = colors.accent;
   themeEventTextInput.value = colors.eventText;
+  themeBorderInput.value = colors.border;
 }
 
 function fillThemeInputs(theme) {
@@ -780,6 +787,7 @@ function fillThemeInputs(theme) {
   themeTextInput.value = theme.text || DEFAULT_THEME_INPUTS.text;
   themeAccentInput.value = theme.accent || DEFAULT_THEME_INPUTS.accent;
   themeEventTextInput.value = theme.eventText || DEFAULT_THEME_INPUTS.eventText;
+  themeBorderInput.value = theme.border || DEFAULT_THEME_INPUTS.border;
   themeFontSelect.value = theme.font || '';
   themeFontSizeSelect.value = theme.fontSize || 'normal';
   themeBoldCheckbox.checked = Boolean(theme.bold);
@@ -839,6 +847,9 @@ function applyTheme(theme) {
 
   if (theme.eventText) root.setProperty('--event-text-color', theme.eventText);
   else root.removeProperty('--event-text-color');
+
+  if (theme.border) root.setProperty('--border-color', theme.border);
+  else root.removeProperty('--border-color');
 
   if (theme.font) root.setProperty('--font-family', theme.font);
   else root.removeProperty('--font-family');

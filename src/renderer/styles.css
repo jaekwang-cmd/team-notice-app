@@ -6,6 +6,7 @@
   --app-bg: radial-gradient(circle at 20% 0%, #3a3f8f 0%, #1c1f3a 45%, #0d0e1c 100%);
   --font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
   --event-text-color: #b9e8cc;
+  --border-color: #ffffff;
 }
 
 * {
@@ -38,7 +39,7 @@ body[data-bold='true'] * {
   background: var(--app-bg);
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--border-color) 8%, transparent);
 }
 
 .titlebar {
@@ -68,7 +69,7 @@ body[data-bold='true'] * {
   height: 24px;
   border: none;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--border-color) 6%, transparent);
   color: #eef0fa;
   cursor: pointer;
   font-size: 13px;
@@ -117,12 +118,12 @@ body[data-bold='true'] * {
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--border-color) 10%, transparent);
   backdrop-filter: blur(30px) saturate(160%);
   -webkit-backdrop-filter: blur(30px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid color-mix(in srgb, var(--border-color) 25%, transparent);
   border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 color-mix(in srgb, var(--border-color) 25%, transparent);
   padding: 16px;
 }
 
@@ -133,7 +134,7 @@ body[data-card-style='matte'] .glass-card {
   background: var(--card-tint, rgb(26, 29, 51));
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid color-mix(in srgb, var(--border-color) 6%, transparent);
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
@@ -144,8 +145,8 @@ body[data-card-style='3d'] .glass-card {
   -webkit-backdrop-filter: none;
   border: none;
   border-radius: 26px;
-  box-shadow: 12px 12px 24px rgba(0, 0, 0, 0.55), -10px -10px 20px rgba(255, 255, 255, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: 12px 12px 24px rgba(0, 0, 0, 0.55), -10px -10px 20px color-mix(in srgb, var(--border-color) 6%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--border-color) 12%, transparent);
 }
 
 .calendar-card {
@@ -194,7 +195,7 @@ body[data-card-style='3d'] .glass-card {
   height: 26px;
   border: none;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--border-color) 8%, transparent);
   color: #eef0fa;
   font-size: 16px;
   cursor: pointer;
@@ -289,7 +290,7 @@ body[data-card-style='3d'] .glass-card {
 }
 
 .day-cell:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--border-color) 8%, transparent);
   cursor: pointer;
 }
 
@@ -324,7 +325,7 @@ body[data-card-style='3d'] .glass-card {
   width: 260px;
   flex-shrink: 0;
   padding-right: 16px;
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid color-mix(in srgb, var(--border-color) 12%, transparent);
   display: flex;
   flex-direction: column;
 }
@@ -346,8 +347,8 @@ body[data-card-style='3d'] .glass-card {
 }
 
 .notice-item {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--border-color) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 10%, transparent);
   border-radius: 12px;
   padding: 8px 10px;
 }
@@ -415,7 +416,7 @@ body[data-card-style='3d'] .glass-card {
 .notice-edit-row input {
   flex: 1;
   border: 1px solid rgba(120, 140, 255, 0.5);
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--border-color) 8%, transparent);
   border-radius: 8px;
   padding: 5px 8px;
   color: #eef0fa;
@@ -429,7 +430,7 @@ body[data-card-style='3d'] .glass-card {
   padding: 4px 10px;
   font-size: 11px;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--border-color) 10%, transparent);
   color: #eef0fa;
 }
 
@@ -449,8 +450,8 @@ body[data-card-style='3d'] .glass-card {
 
 .notice-input input {
   flex: 1;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid color-mix(in srgb, var(--border-color) 14%, transparent);
+  background: color-mix(in srgb, var(--border-color) 6%, transparent);
   border-radius: 10px;
   padding: 8px 10px;
   color: #eef0fa;
@@ -471,6 +472,8 @@ body[data-card-style='3d'] .glass-card {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .notice-input button:hover {
@@ -507,8 +510,8 @@ body[data-card-style='3d'] .glass-card {
 
 #admin-emails-input {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid color-mix(in srgb, var(--border-color) 14%, transparent);
+  background: color-mix(in srgb, var(--border-color) 6%, transparent);
   border-radius: 10px;
   padding: 8px 10px;
   color: var(--text-color);
@@ -519,8 +522,8 @@ body[data-card-style='3d'] .glass-card {
 
 .settings-card input[type='text'] {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid color-mix(in srgb, var(--border-color) 14%, transparent);
+  background: color-mix(in srgb, var(--border-color) 6%, transparent);
   border-radius: 10px;
   padding: 8px 10px;
   color: #eef0fa;
@@ -549,7 +552,7 @@ body[data-card-style='3d'] .glass-card {
   padding: 7px 14px;
   font-size: 13px;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--border-color) 8%, transparent);
   color: #eef0fa;
 }
 
@@ -584,8 +587,8 @@ body[data-card-style='3d'] .glass-card {
 }
 
 .theme-row select {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid color-mix(in srgb, var(--border-color) 14%, transparent);
+  background: color-mix(in srgb, var(--border-color) 6%, transparent);
   color: var(--text-color);
   border-radius: 8px;
   padding: 4px 6px;
@@ -618,7 +621,7 @@ body[data-card-style='3d'] .glass-card {
   font-size: 12px;
   margin-bottom: 14px;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--border-color) 8%, transparent);
   color: var(--text-color);
 }
 
@@ -630,7 +633,7 @@ body[data-card-style='3d'] .glass-card {
   width: 240px;
   flex-shrink: 0;
   padding-left: 16px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 1px solid color-mix(in srgb, var(--border-color) 12%, transparent);
   display: flex;
   flex-direction: column;
 }
@@ -657,8 +660,8 @@ body[data-card-style='3d'] .glass-card {
 }
 
 .day-event-item {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--border-color) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 10%, transparent);
   border-radius: 10px;
   padding: 8px 10px;
   font-size: 12px;
@@ -712,7 +715,7 @@ body[data-card-style='3d'] .glass-card {
   border: none;
   border-radius: 10px;
   padding: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--border-color) 8%, transparent);
   color: #eef0fa;
   font-size: 12px;
   cursor: pointer;
@@ -733,8 +736,8 @@ body[data-card-style='3d'] .glass-card {
 }
 
 .event-form input[type='text'] {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid color-mix(in srgb, var(--border-color) 14%, transparent);
+  background: color-mix(in srgb, var(--border-color) 6%, transparent);
   border-radius: 8px;
   padding: 7px 9px;
   color: #eef0fa;
@@ -761,8 +764,8 @@ body[data-card-style='3d'] .glass-card {
 }
 
 .event-time-row input[type='time'] {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid color-mix(in srgb, var(--border-color) 14%, transparent);
+  background: color-mix(in srgb, var(--border-color) 6%, transparent);
   border-radius: 6px;
   padding: 4px 6px;
   color: #eef0fa;
@@ -781,7 +784,7 @@ body[data-card-style='3d'] .glass-card {
   padding: 6px 12px;
   font-size: 12px;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--border-color) 8%, transparent);
   color: #eef0fa;
 }
 
