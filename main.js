@@ -83,7 +83,7 @@ function createWindow() {
 function createTray() {
   const trayIcon = nativeImage.createFromPath(APP_ICON_PATH).resize({ width: 32, height: 32 });
   tray = new Tray(trayIcon);
-  tray.setToolTip('Team Notice');
+  tray.setToolTip('스케줄 캘린더');
 
   const contextMenu = Menu.buildFromTemplate([
     {

@@ -22,7 +22,7 @@
   },
   "build": {
     "appId": "com.teamnotice.app",
-    "productName": "Team Notice",
+    "productName": "스케줄 캘린더",
     "files": [
       "main.js",
       "preload.js",
