@@ -70,7 +70,7 @@ body[data-bold='true'] * {
   border: none;
   border-radius: 8px;
   background: color-mix(in srgb, var(--border-color) 6%, transparent);
-  color: #eef0fa;
+  color: var(--text-color);
   cursor: pointer;
   font-size: 13px;
   transition: background 0.15s ease;
@@ -196,7 +196,7 @@ body[data-card-style='3d'] .glass-card {
   border: none;
   border-radius: 8px;
   background: color-mix(in srgb, var(--border-color) 8%, transparent);
-  color: #eef0fa;
+  color: var(--text-color);
   font-size: 16px;
   cursor: pointer;
 }
@@ -381,14 +381,14 @@ body[data-card-style='3d'] .glass-card {
 .notice-actions button {
   border: none;
   background: none;
-  color: #b7bfe6;
+  color: color-mix(in srgb, var(--text-color) 70%, transparent);
   font-size: 11px;
   cursor: pointer;
   padding: 0;
 }
 
 .notice-actions button:hover {
-  color: #ffffff;
+  color: var(--text-color);
   text-decoration: underline;
 }
 
@@ -419,7 +419,7 @@ body[data-card-style='3d'] .glass-card {
   background: color-mix(in srgb, var(--border-color) 8%, transparent);
   border-radius: 8px;
   padding: 5px 8px;
-  color: #eef0fa;
+  color: var(--text-color);
   font-size: 12px;
   outline: none;
 }
@@ -431,7 +431,7 @@ body[data-card-style='3d'] .glass-card {
   font-size: 11px;
   cursor: pointer;
   background: color-mix(in srgb, var(--border-color) 10%, transparent);
-  color: #eef0fa;
+  color: var(--text-color);
 }
 
 .notice-empty {
@@ -454,7 +454,7 @@ body[data-card-style='3d'] .glass-card {
   background: color-mix(in srgb, var(--border-color) 6%, transparent);
   border-radius: 10px;
   padding: 8px 10px;
-  color: #eef0fa;
+  color: var(--text-color);
   font-size: 13px;
   outline: none;
 }
@@ -526,7 +526,7 @@ body[data-card-style='3d'] .glass-card {
   background: color-mix(in srgb, var(--border-color) 6%, transparent);
   border-radius: 10px;
   padding: 8px 10px;
-  color: #eef0fa;
+  color: var(--text-color);
   font-size: 13px;
   margin-bottom: 14px;
   outline: none;
@@ -553,7 +553,7 @@ body[data-card-style='3d'] .glass-card {
   font-size: 13px;
   cursor: pointer;
   background: color-mix(in srgb, var(--border-color) 8%, transparent);
-  color: #eef0fa;
+  color: var(--text-color);
 }
 
 #settings-save {
@@ -693,14 +693,14 @@ body[data-card-style='3d'] .glass-card {
 .day-event-item .event-actions button {
   border: none;
   background: none;
-  color: #b7bfe6;
+  color: color-mix(in srgb, var(--text-color) 70%, transparent);
   font-size: 11px;
   cursor: pointer;
   padding: 0;
 }
 
 .day-event-item .event-actions button:hover {
-  color: #fff;
+  color: var(--text-color);
   text-decoration: underline;
 }
 
@@ -716,7 +716,7 @@ body[data-card-style='3d'] .glass-card {
   border-radius: 10px;
   padding: 8px;
   background: color-mix(in srgb, var(--border-color) 8%, transparent);
-  color: #eef0fa;
+  color: var(--text-color);
   font-size: 12px;
   cursor: pointer;
 }
@@ -740,7 +740,7 @@ body[data-card-style='3d'] .glass-card {
   background: color-mix(in srgb, var(--border-color) 6%, transparent);
   border-radius: 8px;
   padding: 7px 9px;
-  color: #eef0fa;
+  color: var(--text-color);
   font-size: 12px;
   outline: none;
 }
@@ -768,7 +768,7 @@ body[data-card-style='3d'] .glass-card {
   background: color-mix(in srgb, var(--border-color) 6%, transparent);
   border-radius: 6px;
   padding: 4px 6px;
-  color: #eef0fa;
+  color: var(--text-color);
   font-size: 11px;
 }
 
@@ -785,7 +785,7 @@ body[data-card-style='3d'] .glass-card {
   font-size: 12px;
   cursor: pointer;
   background: color-mix(in srgb, var(--border-color) 8%, transparent);
-  color: #eef0fa;
+  color: var(--text-color);
 }
 
 #event-share-team-btn {
