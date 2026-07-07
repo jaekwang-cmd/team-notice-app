@@ -51,6 +51,8 @@ const teamEventSyncFailures = new Map(); // teamEventId -> lastFailedAtMillis
 const TEAM_EVENT_RETRY_COOLDOWN_MS = 5 * 60 * 1000; // don't hammer the Calendar API for events that keep failing
 const teamEventSyncInFlight = new Map(); // teamEventId -> in-progress Promise (prevents duplicate creates)
 
+const APP_ICON_PATH = path.join(__dirname, 'build', 'icon.png');
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1320,
@@ -59,6 +61,7 @@ function createWindow() {
     minHeight: 860,
     frame: false,
     backgroundColor: '#161a2b',
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -76,21 +79,9 @@ function createWindow() {
   });
 }
 
-function createTrayIcon() {
-  const size = 16;
-  const buffer = Buffer.alloc(size * size * 4);
-  for (let i = 0; i < size * size; i += 1) {
-    const offset = i * 4;
-    buffer[offset] = 0xff; // B
-    buffer[offset + 1] = 0x8c; // G
-    buffer[offset + 2] = 0x7c; // R  (~#7c8cff accent color, in BGRA order)
-    buffer[offset + 3] = 0xff; // A
-  }
-  return nativeImage.createFromBitmap(buffer, { width: size, height: size });
-}
-
 function createTray() {
-  tray = new Tray(createTrayIcon());
+  const trayIcon = nativeImage.createFromPath(APP_ICON_PATH).resize({ width: 32, height: 32 });
+  tray = new Tray(trayIcon);
   tray.setToolTip('Team Notice');
 
   const contextMenu = Menu.buildFromTemplate([
