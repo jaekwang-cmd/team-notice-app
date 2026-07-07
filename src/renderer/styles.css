@@ -543,14 +543,21 @@ body[data-card-style='3d'] .glass-card {
   --color-button-bg: #6366be;
   --color-button-text: #ffffff;
   --color-secondary-button-bg: #e4e5f4;
+  /* `color` on <body> is only ever computed once from the live (possibly
+     dark) --color-text-primary; plain inheritance won't re-run that var()
+     just because we redeclared the custom property here. Re-declaring
+     `color` itself forces every descendant to inherit OUR frozen value. */
+  color: var(--color-text-primary);
 }
 
-/* Settings dialog always renders as the plain glass-block style, regardless
-   of the card-style radio the user has live-selected for the app itself. */
+/* Settings dialog always renders as a plain, fully opaque light card,
+   regardless of the card-style radio or theme mode live-selected for the
+   app itself — no translucency/blur, or the dark app background behind it
+   bleeds through and tints it navy despite the frozen panel-bg value. */
 #settings-panel .glass-card {
-  background: color-mix(in srgb, var(--color-panel-bg) 60%, transparent) !important;
-  backdrop-filter: blur(30px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(30px) saturate(160%) !important;
+  background: var(--color-panel-bg) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   border: 1px solid var(--color-border) !important;
   border-radius: 20px !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--color-border) !important;

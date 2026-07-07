@@ -60,6 +60,7 @@ function createWindow() {
     minWidth: 1220,
     minHeight: 860,
     frame: false,
+    maximizable: false,
     backgroundColor: '#161a2b',
     icon: APP_ICON_PATH,
     webPreferences: {
