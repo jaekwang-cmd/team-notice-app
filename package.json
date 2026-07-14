@@ -1,6 +1,6 @@
 {
   "name": "team-notice-app",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "개인 캘린더 + 팀 실시간 공지 데스크톱 앱",
   "main": "main.js",
   "private": true,

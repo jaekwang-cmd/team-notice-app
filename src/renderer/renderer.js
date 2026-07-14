@@ -650,6 +650,14 @@ const adminEmailsInput = document.getElementById('admin-emails-input');
 
 let lastSavedTheme = {};
 
+// Applied immediately on change, unlike theme fields which only commit on
+// Save — otherwise toggling it and closing without pressing Save silently
+// does nothing, and there's no visual cue (unlike the live theme preview)
+// to suggest anything was left unsaved.
+autostartToggle.addEventListener('change', () => {
+  window.api.setAutostart(autostartToggle.checked);
+});
+
 document.getElementById('btn-settings').onclick = async () => {
   autostartToggle.checked = await window.api.getAutostart();
   const theme = await window.api.getTheme();
