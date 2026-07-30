@@ -3,7 +3,6 @@ const fs = require('fs');
 const { app, BrowserWindow, ipcMain, Notification, dialog, Tray, Menu, nativeImage } = require('electron');
 const Store = require('electron-store');
 const { autoUpdater } = require('electron-updater');
-const ExcelJS = require('exceljs');
 
 const koreanHolidays = require('./src/main/koreanHolidays');
 const googleAuth = require('./src/main/googleAuth');
@@ -666,6 +665,9 @@ ipcMain.handle('chulgo:delete', async (_e, id) => {
 const CHULGO_EXPORT_TEMPLATE_PATH = path.join(__dirname, 'assets', 'chulgo-export-template.xlsx');
 
 ipcMain.handle('chulgo:export-excel', async (_e, { yearMonth, staffName, position, rows }) => {
+  // 앱 시작 시 무겁게 미리 불러오면 초반 반응 속도가 떨어지므로, 실제로 내보내기를
+  // 누른 시점에만 로드한다 (require는 이후 캐시되어 재호출 비용이 거의 없음).
+  const ExcelJS = require('exceljs');
   const [year, month] = yearMonth.split('-').map(Number);
   const staffLabel = [staffName, position].filter(Boolean).join(' ');
 
@@ -696,7 +698,9 @@ ipcMain.handle('chulgo:export-excel', async (_e, { yearMonth, staffName, positio
     row.getCell(11).value = staffName || '';
     row.getCell(12).value = r.feeMethod || 'AG';
     row.getCell(13).value = r.remark || '';
-    row.commit();
+    // .commit() is only meaningful for the streaming WorkbookWriter — calling it on a
+    // normal Row throws (it reaches into streaming-only internals that are never set up
+    // here), which was the exact cause of every export failing.
   });
 
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {

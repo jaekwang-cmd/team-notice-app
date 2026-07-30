@@ -1697,9 +1697,14 @@ const chulgoExcelPopup = document.getElementById('chulgo-excel-popup');
 const chulgoExcelMonthLabel = document.getElementById('chulgo-excel-month-label');
 const chulgoExcelTableWrap = document.getElementById('chulgo-excel-table-wrap');
 
+// 대리점 여부는 별도 체크박스가 아니라, 장부의 "대리점수당" 칸에 금액이 있는지로 자동 판정한다.
+function chulgoHasAgency(e) {
+  return Number(e.agencyFee) > 0;
+}
+
 function chulgoDefaultRemark(e) {
   const hasPromo = Number(e.promo) > 0;
-  const hasAgency = Boolean(e.agency);
+  const hasAgency = chulgoHasAgency(e);
   if (hasPromo && hasAgency) return '추가수수료 % / 대리점';
   if (hasAgency) return '대리점';
   if (hasPromo) return '추가수수료 %';
@@ -1730,7 +1735,7 @@ function renderChulgoExcelPreview() {
           <option value="CM" ${e.feeMethod === 'CM' ? 'selected' : ''}>CM</option>
         </select>
       </td>
-      <td class="chulgo-check-cell"><input type="checkbox" data-key="agency" ${e.agency ? 'checked' : ''} title="대리점"></td>
+      <td class="chulgo-check-cell" title="장부의 대리점수당 금액으로 자동 판정됨">${chulgoHasAgency(e) ? '✓' : ''}</td>
       <td><input type="text" data-key="remark" value="${(e.remark != null ? e.remark : chulgoDefaultRemark(e)).replace(/"/g, '&quot;')}"></td>
     </tr>
   `
@@ -1761,20 +1766,12 @@ function renderChulgoExcelPreview() {
   });
 
   chulgoExcelTableWrap.querySelectorAll('[data-key]').forEach((el) => {
-    const eventName = el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'change';
-    el.addEventListener(eventName, () => {
+    el.addEventListener('change', () => {
       const id = el.closest('tr').dataset.id;
       const key = el.dataset.key;
-      const value =
-        el.type === 'checkbox' ? el.checked : el.classList.contains('chulgo-money') ? chulgoParseMoneyRaw(el.value) : el.value;
+      const value = el.classList.contains('chulgo-money') ? chulgoParseMoneyRaw(el.value) : el.value;
       const entry = chulgoEntries.find((x) => x.id === id);
       if (entry) entry[key] = value; // optimistic — Firestore snapshot reconciles right after
-      if (key === 'agency' && entry) {
-        // 대리점 체크 상태가 바뀌면 아직 손대지 않은 비고 자리표시 문구도 같이 갱신
-        const row = el.closest('tr');
-        const remarkInput = row.querySelector('[data-key="remark"]');
-        if (remarkInput && entry.remark == null) remarkInput.value = chulgoDefaultRemark(entry);
-      }
       chulgoUpdateField(id, key, value);
     });
   });
