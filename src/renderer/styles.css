@@ -967,8 +967,8 @@ body[data-card-style='3d'] .glass-card {
 }
 
 .chulgo-card {
-  width: min(1400px, 94vw);
-  height: 86vh;
+  width: min(1760px, 97vw);
+  height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
