@@ -74,6 +74,12 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'renderer', 'index.html'));
 
+  // Renderer console.error/warn wouldn't otherwise reach the main process's stdout —
+  // forward them so they show up wherever this app's own logs are captured.
+  mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    if (level >= 2) console.error(`[renderer] ${message} (${sourceId}:${line})`);
+  });
+
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();

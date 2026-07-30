@@ -1413,11 +1413,22 @@ function chulgoOpenMemoPopup(id) {
   chulgoMemoText.focus();
 }
 
-document.getElementById('chulgo-memo-save').addEventListener('click', () => {
+document.getElementById('chulgo-memo-save').addEventListener('click', async () => {
   if (!chulgoMemoEditingId) return;
-  const entry = chulgoEntries.find((x) => x.id === chulgoMemoEditingId);
-  if (entry) entry.memo = chulgoMemoText.value;
-  chulgoUpdateField(chulgoMemoEditingId, 'memo', chulgoMemoText.value);
+  const id = chulgoMemoEditingId;
+  const value = chulgoMemoText.value;
+  try {
+    // Awaited (unlike other field edits, which fire-and-forget) so a failure — e.g. a
+    // Firestore rule mismatch — surfaces as a visible alert instead of a popup that
+    // quietly closes without actually having saved anything.
+    await window.api.updateChulgoEntry({ id, memo: value });
+  } catch (err) {
+    console.error('메모 저장 실패:', err);
+    alert(chulgoFriendlyError(err));
+    return; // leave the popup open so the typed text isn't lost
+  }
+  const entry = chulgoEntries.find((x) => x.id === id);
+  if (entry) entry.memo = value;
   chulgoMemoPopup.classList.add('hidden');
   renderChulgo();
 });

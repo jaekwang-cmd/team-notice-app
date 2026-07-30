@@ -182,6 +182,8 @@ function subscribeToChulgoEntries(db, uid, onUpdate, onError) {
           agencyFee: data.agencyFee || 0,
           supplies: data.supplies || 0,
           status: data.status || '-',
+          dbType: data.dbType || '',
+          memo: data.memo || '',
           countsQuota: data.countsQuota !== false,
         };
       });
