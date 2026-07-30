@@ -51,12 +51,14 @@ const teamEventSyncFailures = new Map(); // teamEventId -> lastFailedAtMillis
 const TEAM_EVENT_RETRY_COOLDOWN_MS = 5 * 60 * 1000; // don't hammer the Calendar API for events that keep failing
 const teamEventSyncInFlight = new Map(); // teamEventId -> in-progress Promise (prevents duplicate creates)
 
+let unsubscribeChulgo = null;
+
 const APP_ICON_PATH = path.join(__dirname, 'build', 'icon.png');
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1320,
-    height: 940,
+    width: 1680,
+    height: 960,
     minWidth: 1220,
     minHeight: 860,
     frame: false,
@@ -310,21 +312,77 @@ function stopTeamEventsSubscription() {
   isFirstTeamEventsSnapshot = true;
 }
 
+// --- Personal 출고 관리 장부 realtime (scoped to the signed-in user's own uid) ---
+
+function startChulgoSubscription() {
+  if (unsubscribeChulgo) return;
+  const uid = firebaseHandle.auth.currentUser && firebaseHandle.auth.currentUser.uid;
+  if (!uid) return;
+  unsubscribeChulgo = firebaseClient.subscribeToChulgoEntries(
+    firebaseHandle.db,
+    uid,
+    (entries) => {
+      if (mainWindow) mainWindow.webContents.send('chulgo:update', entries);
+    },
+    (err) => console.error('출고 장부 subscribe error:', err)
+  );
+}
+
+function stopChulgoSubscription() {
+  if (unsubscribeChulgo) {
+    unsubscribeChulgo();
+    unsubscribeChulgo = null;
+  }
+  if (mainWindow) mainWindow.webContents.send('chulgo:update', []);
+}
+
 // --- Shared helpers ---
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Subscriptions are driven centrally by onAuthStateChanged (see setupAuthStateListener),
+// not from here — this function's only job is to get Firebase signed in. Right after a
+// reboot, networking can still be settling, so a single failed attempt used to leave the
+// user looking "signed in" (their Google Calendar token was still cached locally) while
+// Firestore silently never connected — every subscription's data (announcements, the
+// 출고 장부, etc.) stayed empty with no visible error. Retrying here closes that window.
 async function trySignInFirebaseFromStoredGoogleSession() {
   if (!firebaseHandle || !googleAuth.isSignedIn()) return;
-  try {
-    const idToken = await googleAuth.getFreshIdToken(config.google);
-    await firebaseClient.signInWithGoogleIdToken(firebaseHandle.auth, idToken);
-    startAnnouncementsSubscription();
-    startAdminsSubscription();
-    startTeamEventsSubscription();
-    await reconcileTeamEventsForCurrentUser();
-    if (mainWindow) mainWindow.webContents.send('auth:updated', currentUserPayload());
-  } catch (err) {
-    console.error('저장된 구글 세션으로 재로그인 실패:', err);
+  const attempts = 4;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const idToken = await googleAuth.getFreshIdToken(config.google);
+      await firebaseClient.signInWithGoogleIdToken(firebaseHandle.auth, idToken);
+      return;
+    } catch (err) {
+      console.error(`저장된 구글 세션으로 재로그인 실패 (시도 ${i + 1}/${attempts}):`, err);
+      if (i < attempts - 1) await sleep(2000 * (i + 1));
+    }
   }
+}
+
+// Single source of truth for "is Firebase actually signed in right now" — fires
+// immediately with the current state and again on every future change, so a slow or
+// retried sign-in (or a sign-out) always starts/stops the right subscriptions exactly
+// once, regardless of timing.
+function setupAuthStateListener() {
+  firebaseClient.onAuthStateChangedListener(firebaseHandle.auth, (user) => {
+    if (user) {
+      startAnnouncementsSubscription();
+      startAdminsSubscription();
+      startTeamEventsSubscription();
+      startChulgoSubscription();
+      reconcileTeamEventsForCurrentUser().catch((err) => console.error('팀 일정 재동기화 실패:', err));
+    } else {
+      stopAnnouncementsSubscription();
+      stopAdminsSubscription();
+      stopTeamEventsSubscription();
+      stopChulgoSubscription();
+    }
+    if (mainWindow) mainWindow.webContents.send('auth:updated', currentUserPayload());
+  });
 }
 
 function currentUserPayload() {
@@ -379,6 +437,7 @@ app.whenReady().then(() => {
 
   if (!isPlaceholder) {
     firebaseHandle = firebaseClient.initFirebase(config.firebase);
+    setupAuthStateListener();
     trySignInFirebaseFromStoredGoogleSession();
   }
 
@@ -395,6 +454,7 @@ app.on('before-quit', () => {
   stopAnnouncementsSubscription();
   stopAdminsSubscription();
   stopTeamEventsSubscription();
+  stopChulgoSubscription();
 });
 
 // Window is hidden (not destroyed) on close, and the tray keeps the process
@@ -425,6 +485,10 @@ ipcMain.handle('config:status', () => ({
 ipcMain.handle('theme:get', () => settingsStore.get('theme', {}));
 ipcMain.handle('theme:set', (_e, theme) => settingsStore.set('theme', theme));
 
+// --- 출고 장부: 직책 설정 (per-Windows-user, stored locally like theme) ---
+ipcMain.handle('chulgo:get-position', () => settingsStore.get('chulgoPosition', '과장'));
+ipcMain.handle('chulgo:set-position', (_e, position) => settingsStore.set('chulgoPosition', position));
+
 // --- Korean holidays ---
 ipcMain.handle('calendar:get-holidays', (_e, year) => koreanHolidays.getHolidaysForYear(year));
 
@@ -432,20 +496,13 @@ ipcMain.handle('calendar:get-holidays', (_e, year) => koreanHolidays.getHolidays
 ipcMain.handle('google:is-signed-in', () => googleAuth.isSignedIn());
 ipcMain.handle('google:sign-in', async () => {
   const { idToken } = await googleAuth.signIn(config.google);
-  if (firebaseHandle) {
-    await firebaseClient.signInWithGoogleIdToken(firebaseHandle.auth, idToken);
-    startAnnouncementsSubscription();
-    startAdminsSubscription();
-    startTeamEventsSubscription();
-    await reconcileTeamEventsForCurrentUser();
-  }
+  // Subscriptions start from setupAuthStateListener once this actually lands, not from here.
+  if (firebaseHandle) await firebaseClient.signInWithGoogleIdToken(firebaseHandle.auth, idToken);
   return currentUserPayload();
 });
 ipcMain.handle('google:sign-out', async () => {
   googleAuth.signOut();
-  stopAnnouncementsSubscription();
-  stopAdminsSubscription();
-  stopTeamEventsSubscription();
+  // Subscriptions stop from setupAuthStateListener once this actually lands, not from here.
   if (firebaseHandle) await firebaseClient.signOutFirebase(firebaseHandle.auth);
 });
 ipcMain.handle('google:get-events', async (_e, { timeMin, timeMax }) => {
@@ -462,6 +519,14 @@ ipcMain.handle('google:delete-event', (_e, payload) => googleAuth.deleteEvent(co
 
 // --- Current user / admin status ---
 ipcMain.handle('auth:get-current-user', () => currentUserPayload());
+
+// Manual escape hatch for the "looked signed in right after boot but Firestore never
+// actually connected" case — retries the same sign-in path setupAuthStateListener reacts
+// to, without making the user log out and back in.
+ipcMain.handle('auth:refresh', async () => {
+  await trySignInFirebaseFromStoredGoogleSession();
+  return currentUserPayload();
+});
 
 function requireAdmin() {
   const { isAdmin } = currentUserPayload();
@@ -564,4 +629,32 @@ ipcMain.handle('team-events:delete', async (_e, id) => {
     teamEventMapStore.delete(id);
   }
   teamEventSyncFailures.delete(id);
+});
+
+// --- 출고 관리 장부 (personal — only ever visible/writable by its own author) ---
+function requireSignedInUser() {
+  const user = firebaseHandle && firebaseHandle.auth.currentUser;
+  if (!user) throw new Error('NOT_SIGNED_IN');
+  return user;
+}
+
+ipcMain.handle('chulgo:create', async (_e, data) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  const user = requireSignedInUser();
+  return firebaseClient.createChulgoEntry(firebaseHandle.db, { ...data, authorUid: user.uid });
+});
+
+ipcMain.handle('chulgo:update', async (_e, { id, ...data }) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSignedInUser();
+  // authorUid is never accepted from the renderer here, so a user can only ever
+  // edit fields on entries their own query already scoped them to.
+  delete data.authorUid;
+  await firebaseClient.updateChulgoEntry(firebaseHandle.db, id, data);
+});
+
+ipcMain.handle('chulgo:delete', async (_e, id) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSignedInUser();
+  await firebaseClient.deleteChulgoEntry(firebaseHandle.db, id);
 });

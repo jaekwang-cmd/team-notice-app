@@ -11,6 +11,7 @@
       <span class="app-title">🗓️ 스케줄 캘린더</span>
       <div class="window-controls">
         <button id="btn-pin" title="창 고정 (항상 위 + 이동 잠금)">📌</button>
+        <button id="btn-chulgo" title="출고 관리 장부">📋</button>
         <button id="btn-settings" title="설정">⚙️</button>
         <button id="btn-minimize" title="최소화">—</button>
         <button id="btn-close" title="닫기">✕</button>
@@ -259,6 +260,82 @@
       <div class="settings-actions">
         <button id="settings-save">저장</button>
         <button id="settings-close">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="chulgo-panel" class="settings-overlay hidden">
+    <div class="glass-card chulgo-card">
+      <div class="chulgo-header">
+        <h3>📋 출고 관리 장부</h3>
+        <div class="chulgo-spacer"></div>
+        <button id="chulgo-refresh" class="nav-btn" title="데이터가 안 보이면 눌러서 새로고침">⟳</button>
+        <button id="chulgo-close" class="nav-btn">✕</button>
+      </div>
+
+      <div class="chulgo-stat-row" id="chulgo-stat-row"></div>
+
+      <div class="chulgo-toolbar">
+        <div class="month-nav">
+          <button class="nav-btn" id="chulgo-prev-month">&lsaquo;</button>
+          <input type="month" id="chulgo-month-picker" />
+          <button class="nav-btn" id="chulgo-next-month">&rsaquo;</button>
+        </div>
+        <button id="chulgo-add-row" class="chulgo-primary-btn">+ 출고 건 추가</button>
+        <div class="chulgo-spacer"></div>
+        <div class="chulgo-position-field">
+          <label for="chulgo-position-select">직책</label>
+          <select id="chulgo-position-select">
+            <option value="주임">주임</option>
+            <option value="대리">대리</option>
+            <option value="과장">과장</option>
+            <option value="차장">차장</option>
+            <option value="팀장">팀장</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="chulgo-month-title-row">
+        <h4 id="chulgo-active-month-label"></h4>
+        <span class="chulgo-month-count" id="chulgo-active-month-count"></span>
+        <div class="chulgo-action-row" id="chulgo-action-row">
+          <span class="chulgo-action-hint" id="chulgo-action-hint">행을 클릭해서 선택하세요</span>
+          <button type="button" id="chulgo-gen-report" class="chulgo-mini-btn" disabled>계약보고</button>
+          <button type="button" id="chulgo-gen-deploy" class="chulgo-mini-btn" disabled>투입보고</button>
+          <button type="button" id="chulgo-gen-guide" class="chulgo-mini-btn" disabled>계약내용 안내문자</button>
+          <button type="button" id="chulgo-gen-connected" class="chulgo-mini-btn" disabled>커넥티드 안내문자</button>
+          <button type="button" id="chulgo-gen-settlement" class="chulgo-mini-btn" disabled>정리문구</button>
+        </div>
+        <span class="chulgo-month-total" id="chulgo-active-month-total"></span>
+      </div>
+      <p class="chulgo-formula-hint" id="chulgo-formula-hint"></p>
+
+      <div class="chulgo-table-wrap" id="chulgo-table-wrap"></div>
+      <div class="chulgo-empty" id="chulgo-empty">이 달에는 아직 입력된 출고 건이 없습니다. "+ 출고 건 추가"로 시작하세요.</div>
+    </div>
+  </div>
+
+  <div id="chulgo-memo-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card">
+      <h4>메모 (계약기간 / 주행거리 / 초기자금)</h4>
+      <p class="chulgo-mini-hint">예: 48개월 30000km 무보증  /  36개월 3만km 보증금 20%  /  60개월 20000km 보증금 500만원</p>
+      <textarea id="chulgo-memo-text" rows="4" placeholder="자유롭게 입력하세요"></textarea>
+      <div class="chulgo-mini-actions">
+        <button type="button" id="chulgo-memo-save">저장</button>
+        <button type="button" id="chulgo-memo-cancel">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="chulgo-result-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card">
+      <h4 id="chulgo-result-title">문구</h4>
+      <textarea id="chulgo-result-text" rows="16" readonly></textarea>
+      <div class="chulgo-mini-actions">
+        <button type="button" id="chulgo-result-copy">복사하기</button>
+        <span id="chulgo-result-copied" class="chulgo-mini-hint"></span>
+        <div class="chulgo-spacer"></div>
+        <button type="button" id="chulgo-result-close">닫기</button>
       </div>
     </div>
   </div>

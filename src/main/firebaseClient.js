@@ -1,5 +1,5 @@
 const { initializeApp } = require('firebase/app');
-const { getAuth, GoogleAuthProvider, signInWithCredential, signOut } = require('firebase/auth');
+const { getAuth, GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged } = require('firebase/auth');
 const {
   getFirestore,
   collection,
@@ -10,6 +10,7 @@ const {
   deleteDoc,
   deleteField,
   query,
+  where,
   orderBy,
   limit,
   onSnapshot,
@@ -31,6 +32,16 @@ async function signInWithGoogleIdToken(auth, idToken) {
 
 async function signOutFirebase(auth) {
   await signOut(auth);
+}
+
+// Fires once immediately with the current state and again on every future
+// change — sign-in, sign-out, or a delayed/retried sign-in completing after
+// the app already finished starting up (e.g. right after a reboot, before
+// networking is fully back). Callers should start/stop their subscriptions
+// from this instead of a one-time check right after calling signIn, so a
+// slow or retried auth doesn't leave them silently never subscribed.
+function onAuthStateChangedListener(auth, callback) {
+  return onAuthStateChanged(auth, callback);
 }
 
 // --- Announcements ---
@@ -149,10 +160,60 @@ async function deleteTeamEvent(db, id) {
   await deleteDoc(doc(db, 'teamEvents', id));
 }
 
+// --- Personal 출고 관리 장부 (each user only ever sees their own entries) ---
+
+function subscribeToChulgoEntries(db, uid, onUpdate, onError) {
+  const q = query(collection(db, 'chulgoEntries'), where('authorUid', '==', uid));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const entries = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          month: data.month,
+          order: data.order || 0,
+          finType: data.finType || '',
+          name: data.name || '',
+          car: data.car || '',
+          company: data.company || '',
+          fee: data.fee || 0,
+          promo: data.promo || 0,
+          agencyFee: data.agencyFee || 0,
+          supplies: data.supplies || 0,
+          status: data.status || '-',
+          countsQuota: data.countsQuota !== false,
+        };
+      });
+      onUpdate(entries);
+    },
+    onError
+  );
+}
+
+async function createChulgoEntry(db, { authorUid, ...data }) {
+  const ref = await addDoc(collection(db, 'chulgoEntries'), {
+    ...data,
+    authorUid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+async function updateChulgoEntry(db, id, data) {
+  await updateDoc(doc(db, 'chulgoEntries', id), { ...data, updatedAt: serverTimestamp() });
+}
+
+async function deleteChulgoEntry(db, id) {
+  await deleteDoc(doc(db, 'chulgoEntries', id));
+}
+
 module.exports = {
   initFirebase,
   signInWithGoogleIdToken,
   signOutFirebase,
+  onAuthStateChangedListener,
   subscribeToAnnouncements,
   postAnnouncement,
   updateAnnouncement,
@@ -165,4 +226,8 @@ module.exports = {
   createTeamEvent,
   updateTeamEvent,
   deleteTeamEvent,
+  subscribeToChulgoEntries,
+  createChulgoEntry,
+  updateChulgoEntry,
+  deleteChulgoEntry,
 };

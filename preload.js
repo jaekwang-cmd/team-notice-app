@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('api', {
   googleDeleteEvent: (payload) => ipcRenderer.invoke('google:delete-event', payload),
 
   getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
+  refreshAuth: () => ipcRenderer.invoke('auth:refresh'),
 
   getAdminList: () => ipcRenderer.invoke('admin:get-list'),
   setAdminList: (emails) => ipcRenderer.invoke('admin:set-list', emails),
@@ -44,4 +45,13 @@ contextBridge.exposeInMainWorld('api', {
   createTeamEvent: (payload) => ipcRenderer.invoke('team-events:create', payload),
   updateTeamEvent: (payload) => ipcRenderer.invoke('team-events:update', payload),
   deleteTeamEvent: (id) => ipcRenderer.invoke('team-events:delete', id),
+
+  createChulgoEntry: (payload) => ipcRenderer.invoke('chulgo:create', payload),
+  updateChulgoEntry: (payload) => ipcRenderer.invoke('chulgo:update', payload),
+  deleteChulgoEntry: (id) => ipcRenderer.invoke('chulgo:delete', id),
+  getChulgoPosition: () => ipcRenderer.invoke('chulgo:get-position'),
+  setChulgoPosition: (position) => ipcRenderer.invoke('chulgo:set-position', position),
+  onChulgoUpdate: (callback) => {
+    ipcRenderer.on('chulgo:update', (_event, entries) => callback(entries));
+  },
 });

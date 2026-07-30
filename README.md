@@ -6,6 +6,7 @@
 - 공지: Firebase Firestore 기반 실시간 동기화. 누군가 공지를 올리면 앱을 켜둔 모든 팀원 화면에 즉시 표시되고 Windows 알림도 뜸. 본인 글 또는 관리자는 수정/삭제 가능, 관리자에게만 "확인함" 체크박스 표시
 - 구글 로그인 한 번으로 캘린더 접근 + Firestore 인증(공지 작성 권한)이 동시에 부여됨
 - 개인화 테마: 배경/날짜 칸 배경/글씨 색/강조색/글씨체를 각자 원하는 대로 설정 가능 (로컬 저장, 팀원끼리 공유 안 됨)
+- 📋 출고 관리 장부: 차량 출고 건을 월별로 입력/편집하는 개인 표. Firestore에 본인 계정으로만 저장되어 어느 컴퓨터에서 로그인하든 같은 데이터가 보임 (다른 팀원에게는 안 보임)
 - 자동 업데이트: GitHub Releases 기반. 새 버전 배포 시 앱이 자동으로 감지해서 업데이트 여부를 물어봄
 
 ## 1. 준비물 (최초 1회, 설정 담당자가 진행)
@@ -23,6 +24,17 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /announcements/{docId} {
       allow read, write: if request.auth != null;
+    }
+    match /teamEvents/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    match /settings/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    // 출고 관리 장부: 본인이 쓴 문서만 읽기/쓰기 가능 (다른 팀원 데이터는 안 보임)
+    match /chulgoEntries/{docId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid;
     }
   }
 }

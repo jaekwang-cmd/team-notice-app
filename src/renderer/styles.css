@@ -933,3 +933,510 @@ body[data-card-style='3d'] .glass-card {
   background: var(--color-divider);
   border-radius: 3px;
 }
+
+/* ================= 출고 관리 장부 ================= */
+
+/* Same "frozen light, independent of app theme" trick as #settings-panel —
+   a dense data table needs to stay legible regardless of dark/custom theme. */
+#chulgo-panel {
+  --color-app-bg: #eef0f4;
+  --color-panel-bg: #f6f7f9;
+  --color-panel-tint-light: #ffffff;
+  --color-panel-tint-dark: #eef0f4;
+  --color-text-primary: #14151a;
+  --color-text-secondary: #5b6270;
+  --color-border: #dde1e7;
+  --color-divider: #e4e7ec;
+  --color-accent: #2a66c9;
+  --color-accent-2: #1f4f9e;
+  --color-input-bg: #ffffff;
+  --color-button-bg: #2a66c9;
+  --color-button-text: #ffffff;
+  --color-secondary-button-bg: #e7ecf5;
+  color: var(--color-text-primary);
+}
+
+#chulgo-panel .glass-card {
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--color-border) !important;
+  padding: 26px !important;
+}
+
+.chulgo-card {
+  width: min(1400px, 94vw);
+  height: 86vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chulgo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  flex-shrink: 0;
+}
+
+.chulgo-header h3 {
+  font-size: 16px;
+}
+
+@keyframes chulgo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.chulgo-spin {
+  animation: chulgo-spin 0.7s linear infinite;
+}
+
+.chulgo-stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 22px;
+  flex-shrink: 0;
+}
+
+.chulgo-stat-tile {
+  background: #f6f7f9;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.chulgo-stat-tile .label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+
+.chulgo-stat-tile .value {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+}
+
+.chulgo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  flex-shrink: 0;
+}
+
+.chulgo-spacer {
+  flex: 1;
+}
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.month-nav input[type='month'] {
+  border: 1px solid var(--color-border);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.chulgo-toolbar button {
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  padding: 7px 13px;
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+
+.chulgo-toolbar button:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.chulgo-primary-btn {
+  background: var(--color-button-bg) !important;
+  border-color: var(--color-button-bg) !important;
+  color: var(--color-button-text) !important;
+}
+
+.chulgo-primary-btn:hover {
+  filter: brightness(1.08);
+  color: var(--color-button-text) !important;
+}
+
+.chulgo-month-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.chulgo-month-title-row h4 {
+  font-size: 14px;
+}
+
+.chulgo-month-count {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+
+.chulgo-month-total {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.chulgo-formula-hint {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin: 0 0 18px;
+  flex-shrink: 0;
+}
+
+.chulgo-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+.chulgo-empty {
+  display: none;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  padding: 30px;
+  text-align: center;
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+}
+
+table.chulgo-ledger {
+  border-collapse: collapse;
+  font-size: 12.5px;
+  table-layout: fixed;
+  width: max-content;
+}
+
+table.chulgo-ledger th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: #f6f7f9;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+table.chulgo-ledger td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--color-divider);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+table.chulgo-ledger tbody tr:hover {
+  background: rgba(42, 102, 201, 0.05);
+}
+
+table.chulgo-ledger input,
+table.chulgo-ledger select {
+  width: 100%;
+  font-size: 12.5px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 7px;
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+table.chulgo-ledger input:hover,
+table.chulgo-ledger select:hover {
+  border-color: var(--color-border);
+}
+
+table.chulgo-ledger input:focus,
+table.chulgo-ledger select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  background: var(--color-input-bg);
+}
+
+table.chulgo-ledger input.chulgo-money {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.chulgo-ledger td.chulgo-computed {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+}
+
+.chulgo-status-완료 {
+  color: #0ca30c;
+}
+
+.chulgo-status-예정 {
+  color: #b5790a;
+}
+
+table.chulgo-ledger tfoot td {
+  font-weight: 700;
+  background: #f6f7f9;
+  border-top: 1px solid var(--color-border);
+  border-bottom: none;
+  text-align: right;
+  position: sticky;
+  bottom: 0;
+}
+
+table.chulgo-ledger tfoot td:first-child {
+  text-align: left;
+}
+
+.chulgo-col-resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.chulgo-col-resizer:hover,
+.chulgo-col-resizer.dragging {
+  background: rgba(42, 102, 201, 0.15);
+}
+
+.chulgo-col-resizer::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  top: 20%;
+  bottom: 20%;
+  width: 2px;
+  background: var(--color-border);
+}
+
+table.chulgo-ledger th {
+  position: sticky;
+  position: relative;
+}
+
+.chulgo-check-cell {
+  text-align: center !important;
+}
+
+table.chulgo-ledger th.chulgo-check-cell {
+  font-size: 10px;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.chulgo-quota-check {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--color-accent);
+}
+
+.chulgo-del-btn {
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.chulgo-del-btn:hover {
+  color: #d03b3b;
+}
+
+.chulgo-position-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chulgo-position-field label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.chulgo-position-field select {
+  border: 1px solid var(--color-border);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* --- 문구 생성 버튼 줄 + 행 선택 강조 --- */
+.chulgo-action-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chulgo-action-hint {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin-right: 4px;
+}
+
+.chulgo-mini-btn {
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 7px;
+  border: 1px solid var(--color-border);
+  padding: 5px 10px;
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.chulgo-mini-btn:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.chulgo-mini-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+table.chulgo-ledger tbody tr.selected {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+table.chulgo-ledger tbody tr {
+  cursor: pointer;
+}
+
+.chulgo-memo-btn {
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.chulgo-memo-btn:hover {
+  color: var(--color-accent);
+}
+
+.chulgo-memo-btn.has-memo {
+  color: var(--color-accent);
+}
+
+.chulgo-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+/* --- 메모 / 문구 결과 미니 팝업 --- */
+.chulgo-mini-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.chulgo-mini-card {
+  width: 480px;
+  max-width: 90vw;
+  background: var(--color-panel-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  padding: 18px;
+}
+
+.chulgo-mini-card h4 {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.chulgo-mini-hint {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+.chulgo-mini-card textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.chulgo-mini-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chulgo-mini-actions button {
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+
+#chulgo-memo-save,
+#chulgo-result-copy {
+  background: var(--color-button-bg) !important;
+  color: var(--color-button-text) !important;
+}
