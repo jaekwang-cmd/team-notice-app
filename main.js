@@ -495,6 +495,10 @@ ipcMain.handle('theme:set', (_e, theme) => settingsStore.set('theme', theme));
 ipcMain.handle('chulgo:get-position', () => settingsStore.get('chulgoPosition', '과장'));
 ipcMain.handle('chulgo:set-position', (_e, position) => settingsStore.set('chulgoPosition', position));
 
+// --- 출고 장부: 안내문자용 연락처 (per-Windows-user, stored locally like theme) ---
+ipcMain.handle('chulgo:get-phone', () => settingsStore.get('chulgoPhone', ''));
+ipcMain.handle('chulgo:set-phone', (_e, phone) => settingsStore.set('chulgoPhone', phone));
+
 // --- Korean holidays ---
 ipcMain.handle('calendar:get-holidays', (_e, year) => koreanHolidays.getHolidaysForYear(year));
 

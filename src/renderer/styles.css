@@ -1293,7 +1293,8 @@ table.chulgo-ledger th.chulgo-check-cell {
   color: var(--color-text-secondary);
 }
 
-.chulgo-position-field select {
+.chulgo-position-field select,
+.chulgo-position-field input[type='text'] {
   border: 1px solid var(--color-border);
   background: var(--color-input-bg);
   color: var(--color-text-primary);
@@ -1301,6 +1302,9 @@ table.chulgo-ledger th.chulgo-check-cell {
   padding: 7px 10px;
   font-size: 13px;
   font-weight: 600;
+}
+
+.chulgo-position-field select {
   cursor: pointer;
 }
 

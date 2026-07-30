@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld('api', {
   deleteChulgoEntry: (id) => ipcRenderer.invoke('chulgo:delete', id),
   getChulgoPosition: () => ipcRenderer.invoke('chulgo:get-position'),
   setChulgoPosition: (position) => ipcRenderer.invoke('chulgo:set-position', position),
+  getChulgoPhone: () => ipcRenderer.invoke('chulgo:get-phone'),
+  setChulgoPhone: (phone) => ipcRenderer.invoke('chulgo:set-phone', phone),
   onChulgoUpdate: (callback) => {
     ipcRenderer.on('chulgo:update', (_event, entries) => callback(entries));
   },

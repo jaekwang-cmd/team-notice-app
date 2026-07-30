@@ -899,6 +899,7 @@ const chulgoActiveMonthCount = document.getElementById('chulgo-active-month-coun
 const chulgoActiveMonthTotal = document.getElementById('chulgo-active-month-total');
 const chulgoFormulaHint = document.getElementById('chulgo-formula-hint');
 const chulgoPositionSelect = document.getElementById('chulgo-position-select');
+const chulgoPhoneInput = document.getElementById('chulgo-phone-input');
 
 const CHULGO_COLW_KEY = 'chulgo_colwidths_v1';
 const CHULGO_COLS = [
@@ -960,6 +961,7 @@ function chulgoQuotaPromo(position, countedUnits) {
 
 let chulgoEntries = [];
 let chulgoPosition = '과장';
+let chulgoPhone = '';
 let chulgoSelectedId = null;
 let chulgoColWidths = {};
 try {
@@ -1532,7 +1534,8 @@ document.getElementById('chulgo-gen-guide').addEventListener('click', () => {
 언제든 바로 말씀 주세요 ^^
 
 - 대표님의 담당 직원 -
-■ 담당 직원 : ${currentUser.displayName || '-'}`
+■ 담당 직원 : ${currentUser.displayName || '-'}${chulgoPosition ? ` ${chulgoPosition}` : ''}
+■ 연락처 : ${chulgoPhone || '-'}`
   );
 });
 
@@ -1647,6 +1650,12 @@ document.getElementById('btn-chulgo').addEventListener('click', async () => {
       console.error('직책 불러오기 실패:', err);
     }
     chulgoPositionSelect.value = chulgoPosition;
+    try {
+      chulgoPhone = (await window.api.getChulgoPhone()) || '';
+    } catch (err) {
+      console.error('연락처 불러오기 실패:', err);
+    }
+    chulgoPhoneInput.value = chulgoPhone;
   }
   chulgoUpdateFormulaHint();
   renderChulgo();
@@ -1680,6 +1689,15 @@ chulgoPositionSelect.addEventListener('change', async () => {
     await window.api.setChulgoPosition(chulgoPosition);
   } catch (err) {
     console.error('직책 저장 실패:', err);
+  }
+});
+
+chulgoPhoneInput.addEventListener('change', async () => {
+  chulgoPhone = chulgoPhoneInput.value.trim();
+  try {
+    await window.api.setChulgoPhone(chulgoPhone);
+  } catch (err) {
+    console.error('연락처 저장 실패:', err);
   }
 });
 
