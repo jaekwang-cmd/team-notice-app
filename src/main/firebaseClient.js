@@ -8,11 +8,8 @@ const {
   setDoc,
   updateDoc,
   deleteDoc,
-  deleteField,
   query,
   where,
-  orderBy,
-  limit,
   onSnapshot,
   serverTimestamp,
 } = require('firebase/firestore');
@@ -44,58 +41,45 @@ function onAuthStateChangedListener(auth, callback) {
   return onAuthStateChanged(auth, callback);
 }
 
-// --- Announcements ---
+// --- 개인 메모 (authorUid로 스코프 — 본인 계정에서만 보임, 다른 기기에서 로그인해도 동기화됨) ---
 
-function subscribeToAnnouncements(db, onUpdate, onError) {
-  const q = query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(100));
+function subscribeToMemos(db, uid, onUpdate, onError) {
+  const q = query(collection(db, 'memos'), where('authorUid', '==', uid));
   return onSnapshot(
     q,
     (snapshot) => {
-      const announcements = snapshot.docs.map((docSnap) => {
+      const memos = snapshot.docs.map((docSnap) => {
         const data = docSnap.data();
         return {
           id: docSnap.id,
-          text: data.text,
-          author: data.author,
-          authorUid: data.authorUid,
-          confirmedBy: data.confirmedBy || {},
-          shoutedAt: data.shoutedAt ? data.shoutedAt.toMillis() : null,
+          text: data.text || '',
+          remindAt: data.remindAt || null,
+          reminded: Boolean(data.reminded),
           createdAt: data.createdAt ? data.createdAt.toMillis() : Date.now(),
         };
       });
-      onUpdate(announcements);
+      onUpdate(memos);
     },
     onError
   );
 }
 
-async function postAnnouncement(db, { text, author, authorUid }) {
-  await addDoc(collection(db, 'announcements'), {
-    text,
-    author,
+async function createMemo(db, { authorUid, ...data }) {
+  const ref = await addDoc(collection(db, 'memos'), {
+    ...data,
     authorUid,
-    confirmedBy: {},
-    shoutedAt: null,
+    reminded: false,
     createdAt: serverTimestamp(),
   });
+  return ref.id;
 }
 
-async function updateAnnouncement(db, id, data) {
-  await updateDoc(doc(db, 'announcements', id), data);
+async function updateMemo(db, id, data) {
+  await updateDoc(doc(db, 'memos', id), data);
 }
 
-async function setConfirmedBy(db, id, uid, name, confirmed) {
-  await updateDoc(doc(db, 'announcements', id), {
-    [`confirmedBy.${uid}`]: confirmed ? name : deleteField(),
-  });
-}
-
-async function shoutAnnouncement(db, id) {
-  await updateDoc(doc(db, 'announcements', id), { shoutedAt: serverTimestamp() });
-}
-
-async function deleteAnnouncement(db, id) {
-  await deleteDoc(doc(db, 'announcements', id));
+async function deleteMemo(db, id) {
+  await deleteDoc(doc(db, 'memos', id));
 }
 
 // --- Dynamic admin list ---
@@ -216,12 +200,10 @@ module.exports = {
   signInWithGoogleIdToken,
   signOutFirebase,
   onAuthStateChangedListener,
-  subscribeToAnnouncements,
-  postAnnouncement,
-  updateAnnouncement,
-  setConfirmedBy,
-  shoutAnnouncement,
-  deleteAnnouncement,
+  subscribeToMemos,
+  createMemo,
+  updateMemo,
+  deleteMemo,
   subscribeToAdmins,
   setAdmins,
   subscribeToTeamEvents,

@@ -1,9 +1,11 @@
 const calendarTitle = document.getElementById('calendar-title');
 const calendarGrid = document.getElementById('calendar-grid');
 const googleStatus = document.getElementById('google-status');
-const noticeList = document.getElementById('notice-list');
-const noticeText = document.getElementById('notice-text');
-const noticeSend = document.getElementById('notice-send');
+const memoList = document.getElementById('memo-list');
+const memoText = document.getElementById('memo-text');
+const memoSend = document.getElementById('memo-send');
+const memoAlarmEnable = document.getElementById('memo-alarm-enable');
+const memoAlarmTime = document.getElementById('memo-alarm-time');
 const configBanner = document.getElementById('config-banner');
 const syncBtn = document.getElementById('sync-btn');
 
@@ -15,7 +17,7 @@ const holidaysCache = new Map(); // year -> [{date, name}]
 let eventsByDate = new Map(); // 'YYYY-MM-DD' -> [event, ...]
 let isGoogleSignedIn = false;
 let isConfigured = false;
-let announcements = [];
+let memos = [];
 let currentUser = { signedIn: false, uid: null, isAdmin: false };
 
 function pad(n) {
@@ -142,9 +144,9 @@ async function renderCalendar() {
 
 function updateNoticeInputState() {
   const enabled = isConfigured && isGoogleSignedIn;
-  noticeText.disabled = !enabled;
-  noticeSend.disabled = !enabled;
-  noticeText.placeholder = enabled ? '공지를 입력하세요...' : '구글 로그인 후 공지를 작성할 수 있어요';
+  memoText.disabled = !enabled;
+  memoSend.disabled = !enabled;
+  memoText.placeholder = enabled ? '메모를 입력하세요...' : '구글 로그인 후 메모를 작성할 수 있어요';
 }
 
 function renderGoogleStatus() {
@@ -161,13 +163,13 @@ function renderGoogleStatus() {
       currentUser = { signedIn: false, uid: null, isAdmin: false };
       renderGoogleStatus();
       updateNoticeInputState();
-      renderAnnouncements();
+      renderMemos();
       renderCalendar();
     };
     googleStatus.appendChild(label);
     googleStatus.appendChild(btn);
   } else {
-    label.textContent = '구글 로그인이 필요합니다 (캘린더 + 공지 작성)';
+    label.textContent = '구글 로그인이 필요합니다 (캘린더 + 메모)';
     const btn = document.createElement('button');
     btn.textContent = '로그인';
     btn.onclick = async () => {
@@ -179,7 +181,7 @@ function renderGoogleStatus() {
         currentUser = await window.api.getCurrentUser();
         renderGoogleStatus();
         updateNoticeInputState();
-        renderAnnouncements();
+        renderMemos();
         renderCalendar();
       } catch (err) {
         console.error('구글 로그인 실패:', err);
@@ -205,114 +207,69 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function renderAnnouncements() {
-  noticeList.innerHTML = '';
+function formatAlarmTime(ms) {
+  const d = new Date(ms);
+  const isPast = ms <= Date.now();
+  return `⏰ ${pad(d.getHours())}:${pad(d.getMinutes())}${isPast ? ' 알림 완료' : ' 알림'}`;
+}
 
-  if (announcements.length === 0) {
+function renderMemos() {
+  memoList.innerHTML = '';
+
+  if (memos.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'notice-empty';
-    empty.textContent = '아직 등록된 공지가 없습니다.';
-    noticeList.appendChild(empty);
+    empty.textContent = '아직 등록된 메모가 없습니다.';
+    memoList.appendChild(empty);
     return;
   }
 
-  // announcements arrive newest-first from Firestore; show oldest-first (chat style)
-  const ordered = [...announcements].reverse();
-  ordered.forEach((a) => {
-    const confirmedBy = a.confirmedBy || {};
-    const confirmedNames = Object.values(confirmedBy);
-    const iConfirmed = currentUser.signedIn && Boolean(confirmedBy[currentUser.uid]);
-
+  // memos arrive in no particular order from Firestore; show oldest-first (chat style)
+  const ordered = [...memos].sort((a, b) => a.createdAt - b.createdAt);
+  ordered.forEach((m) => {
     const item = document.createElement('div');
-    item.className = 'notice-item' + (iConfirmed ? ' confirmed' : '');
+    item.className = 'notice-item';
 
     const meta = document.createElement('div');
     meta.className = 'notice-meta';
-    meta.innerHTML = `<span>${escapeHtml(a.author || '익명')}</span><span>${formatTimestamp(a.createdAt)}</span>`;
+    meta.innerHTML = `<span>${m.remindAt ? escapeHtml(formatAlarmTime(m.remindAt)) : ''}</span><span>${formatTimestamp(m.createdAt)}</span>`;
 
     const text = document.createElement('div');
     text.className = 'notice-text';
-    text.textContent = a.text;
+    text.textContent = m.text;
 
     item.appendChild(meta);
     item.appendChild(text);
 
-    const isOwner = currentUser.signedIn && a.authorUid === currentUser.uid;
-    const canManage = isOwner || currentUser.isAdmin;
-
     const actions = document.createElement('div');
     actions.className = 'notice-actions';
 
-    if (canManage) {
-      const editBtn = document.createElement('button');
-      editBtn.textContent = '수정';
-      editBtn.onclick = () => startEditAnnouncement(item, a);
-      actions.appendChild(editBtn);
+    const editBtn = document.createElement('button');
+    editBtn.textContent = '수정';
+    editBtn.onclick = () => startEditMemo(item, m);
+    actions.appendChild(editBtn);
 
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '삭제';
-      delBtn.onclick = async () => {
-        if (!confirm('이 공지를 삭제할까요?')) return;
-        try {
-          await window.api.deleteAnnouncement(a.id);
-        } catch (err) {
-          console.error('공지 삭제 실패:', err);
-          alert('삭제에 실패했습니다.');
-        }
-      };
-      actions.appendChild(delBtn);
-    }
-
-    if (currentUser.isAdmin) {
-      const shoutBtn = document.createElement('button');
-      shoutBtn.textContent = '📢 외치기';
-      shoutBtn.onclick = async () => {
-        if (!confirm('이 공지를 모든 팀원에게 다시 알림으로 보낼까요?')) return;
-        try {
-          await window.api.shoutAnnouncement(a.id);
-        } catch (err) {
-          console.error('외치기 실패:', err);
-          alert('실패했습니다.');
-        }
-      };
-      actions.appendChild(shoutBtn);
-    }
-
-    if (currentUser.signedIn) {
-      const confirmLabel = document.createElement('label');
-      confirmLabel.className = 'confirm-label';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = iConfirmed;
-      checkbox.onchange = async () => {
-        try {
-          await window.api.setAnnouncementConfirmed(a.id, checkbox.checked);
-        } catch (err) {
-          console.error('확인 처리 실패:', err);
-          checkbox.checked = !checkbox.checked;
-        }
-      };
-      confirmLabel.appendChild(checkbox);
-      confirmLabel.appendChild(document.createTextNode('확인함'));
-      actions.appendChild(confirmLabel);
-    }
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '삭제';
+    delBtn.onclick = async () => {
+      if (!confirm('이 메모를 삭제할까요?')) return;
+      try {
+        await window.api.deleteMemo(m.id);
+      } catch (err) {
+        console.error('메모 삭제 실패:', err);
+        alert('삭제에 실패했습니다.');
+      }
+    };
+    actions.appendChild(delBtn);
 
     item.appendChild(actions);
-
-    if (confirmedNames.length > 0) {
-      const confirmedList = document.createElement('div');
-      confirmedList.className = 'notice-confirmed-list';
-      confirmedList.textContent = `확인: ${confirmedNames.map(escapeHtml).join(', ')}`;
-      item.appendChild(confirmedList);
-    }
-
-    noticeList.appendChild(item);
+    memoList.appendChild(item);
   });
 
-  noticeList.scrollTop = noticeList.scrollHeight;
+  memoList.scrollTop = memoList.scrollHeight;
 }
 
-function startEditAnnouncement(itemEl, announcement) {
+function startEditMemo(itemEl, memo) {
   const existingRow = itemEl.querySelector('.notice-edit-row');
   if (existingRow) return;
 
@@ -321,7 +278,7 @@ function startEditAnnouncement(itemEl, announcement) {
 
   const input = document.createElement('input');
   input.type = 'text';
-  input.value = announcement.text;
+  input.value = memo.text;
   input.maxLength = 500;
 
   const saveBtn = document.createElement('button');
@@ -330,10 +287,10 @@ function startEditAnnouncement(itemEl, announcement) {
     const newText = input.value.trim();
     if (!newText) return;
     try {
-      await window.api.editAnnouncement(announcement.id, newText);
+      await window.api.updateMemo({ id: memo.id, text: newText });
       row.remove();
     } catch (err) {
-      console.error('공지 수정 실패:', err);
+      console.error('메모 수정 실패:', err);
       alert('수정에 실패했습니다.');
     }
   };
@@ -349,20 +306,32 @@ function startEditAnnouncement(itemEl, announcement) {
   input.focus();
 }
 
-async function sendAnnouncement() {
-  const text = noticeText.value.trim();
+async function sendMemo() {
+  const text = memoText.value.trim();
   if (!text) return;
 
-  noticeSend.disabled = true;
+  const data = { text };
+  if (memoAlarmEnable.checked && memoAlarmTime.value) {
+    const [h, m] = memoAlarmTime.value.split(':').map(Number);
+    const target = new Date();
+    target.setHours(h, m, 0, 0);
+    if (target.getTime() <= Date.now()) target.setDate(target.getDate() + 1); // 이미 지난 시각이면 내일 그 시각으로
+    data.remindAt = target.getTime();
+  }
+
+  memoSend.disabled = true;
   try {
-    await window.api.postAnnouncement(text);
-    noticeText.value = '';
+    await window.api.createMemo(data);
+    memoText.value = '';
+    memoAlarmEnable.checked = false;
+    memoAlarmTime.value = '';
+    memoAlarmTime.classList.add('hidden');
   } catch (err) {
-    console.error('공지 등록 실패:', err);
-    alert('공지 등록에 실패했습니다. 설정을 확인해주세요.');
+    console.error('메모 등록 실패:', err);
+    alert('메모 등록에 실패했습니다. 설정을 확인해주세요.');
   } finally {
-    noticeSend.disabled = false;
-    noticeText.focus();
+    memoSend.disabled = false;
+    memoText.focus();
   }
 }
 
@@ -625,9 +594,17 @@ syncBtn.onclick = async () => {
   }
 };
 
-noticeSend.onclick = sendAnnouncement;
-noticeText.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendAnnouncement();
+memoSend.onclick = sendMemo;
+memoText.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendMemo();
+});
+memoAlarmEnable.addEventListener('change', () => {
+  memoAlarmTime.classList.toggle('hidden', !memoAlarmEnable.checked);
+  if (memoAlarmEnable.checked && !memoAlarmTime.value) {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 5); // 편의상 지금부터 5분 뒤를 기본값으로
+    memoAlarmTime.value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
 });
 
 document.getElementById('btn-minimize').onclick = () => window.api.minimizeWindow();
@@ -874,9 +851,19 @@ themeResetBtn.onclick = async () => {
   fillThemeInputs({});
 };
 
-window.api.onAnnouncementsUpdate((updated) => {
-  announcements = updated;
-  renderAnnouncements();
+window.api.onMemosUpdate((updated) => {
+  memos = updated;
+  renderMemos();
+});
+
+const memoAlarmPopup = document.getElementById('memo-alarm-popup');
+const memoAlarmPopupText = document.getElementById('memo-alarm-text');
+window.api.onMemoAlarm((memo) => {
+  memoAlarmPopupText.textContent = memo.text;
+  memoAlarmPopup.classList.remove('hidden');
+});
+document.getElementById('memo-alarm-close').addEventListener('click', () => {
+  memoAlarmPopup.classList.add('hidden');
 });
 
 window.api.onAuthUpdated((user) => {
@@ -884,7 +871,7 @@ window.api.onAuthUpdated((user) => {
   isGoogleSignedIn = Boolean(user && user.signedIn);
   renderGoogleStatus();
   updateNoticeInputState();
-  renderAnnouncements();
+  renderMemos();
   renderCalendar();
 });
 
@@ -1764,6 +1751,6 @@ window.api.onChulgoUpdate((entries) => {
   if (isGoogleSignedIn) currentUser = await window.api.getCurrentUser();
   renderGoogleStatus();
   updateNoticeInputState();
-  renderAnnouncements();
+  renderMemos();
   await renderCalendar();
 })();

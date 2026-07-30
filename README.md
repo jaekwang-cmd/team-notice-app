@@ -22,8 +22,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /announcements/{docId} {
-      allow read, write: if request.auth != null;
+    // 개인 메모: 본인이 쓴 문서만 읽기/쓰기 가능 (다른 팀원에게 공유되지 않음)
+    match /memos/{docId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid;
     }
     match /teamEvents/{docId} {
       allow read, write: if request.auth != null;

@@ -29,14 +29,14 @@ contextBridge.exposeInMainWorld('api', {
   getAdminList: () => ipcRenderer.invoke('admin:get-list'),
   setAdminList: (emails) => ipcRenderer.invoke('admin:set-list', emails),
 
-  postAnnouncement: (text) => ipcRenderer.invoke('announcements:post', text),
-  editAnnouncement: (id, text) => ipcRenderer.invoke('announcements:edit', { id, text }),
-  deleteAnnouncement: (id) => ipcRenderer.invoke('announcements:delete', id),
-  setAnnouncementConfirmed: (id, confirmed) =>
-    ipcRenderer.invoke('announcements:set-confirmed', { id, confirmed }),
-  shoutAnnouncement: (id) => ipcRenderer.invoke('announcements:shout', id),
-  onAnnouncementsUpdate: (callback) => {
-    ipcRenderer.on('announcements:update', (_event, announcements) => callback(announcements));
+  createMemo: (payload) => ipcRenderer.invoke('memos:create', payload),
+  updateMemo: (payload) => ipcRenderer.invoke('memos:update', payload),
+  deleteMemo: (id) => ipcRenderer.invoke('memos:delete', id),
+  onMemosUpdate: (callback) => {
+    ipcRenderer.on('memos:update', (_event, memos) => callback(memos));
+  },
+  onMemoAlarm: (callback) => {
+    ipcRenderer.on('memos:alarm', (_event, memo) => callback(memo));
   },
   onAuthUpdated: (callback) => {
     ipcRenderer.on('auth:updated', (_event, user) => callback(user));

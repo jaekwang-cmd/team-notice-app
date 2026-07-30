@@ -13,6 +13,7 @@
     "date-holidays": "^3.23.12",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.3.9",
+    "exceljs": "^4.4.0",
     "firebase": "^10.14.1",
     "googleapis": "^144.0.0"
   },

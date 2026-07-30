@@ -398,10 +398,6 @@ body[data-card-style='3d'] .glass-card {
   word-break: break-word;
 }
 
-.notice-item.confirmed {
-  border-color: rgba(124, 226, 176, 0.5);
-}
-
 .notice-actions {
   display: flex;
   align-items: center;
@@ -421,21 +417,6 @@ body[data-card-style='3d'] .glass-card {
 .notice-actions button:hover {
   color: var(--color-text-primary);
   text-decoration: underline;
-}
-
-.notice-actions .confirm-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: #7ce2b0;
-  margin-left: auto;
-}
-
-.notice-confirmed-list {
-  font-size: 10px;
-  color: var(--color-text-secondary);
-  margin-top: 5px;
 }
 
 .notice-edit-row {
@@ -470,6 +451,45 @@ body[data-card-style='3d'] .glass-card {
   font-size: 12px;
   text-align: center;
   padding: 20px 0;
+}
+
+.memo-alarm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+
+.memo-alarm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.memo-alarm-toggle input {
+  cursor: pointer;
+  accent-color: var(--color-accent);
+}
+
+.memo-alarm-row input[type='time'] {
+  border: 1px solid var(--color-border);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.memo-alarm-popup-text {
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  margin-bottom: 4px;
 }
 
 .notice-input {

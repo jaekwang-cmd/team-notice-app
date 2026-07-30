@@ -26,11 +26,18 @@
       <section class="glass-card calendar-card">
         <div class="calendar-row">
           <div class="notice-sidebar">
-            <h3>📢 팀 공지</h3>
-            <div class="notice-list" id="notice-list"></div>
+            <h3>📝 메모장</h3>
+            <div class="notice-list" id="memo-list"></div>
+            <div class="memo-alarm-row">
+              <label class="memo-alarm-toggle">
+                <input type="checkbox" id="memo-alarm-enable" />
+                <span>⏰ 시간 설정하기</span>
+              </label>
+              <input type="time" id="memo-alarm-time" class="hidden" />
+            </div>
             <div class="notice-input">
-              <input id="notice-text" type="text" placeholder="공지를 입력하세요..." maxlength="500" />
-              <button id="notice-send">보내기</button>
+              <input id="memo-text" type="text" placeholder="메모를 입력하세요..." maxlength="500" />
+              <button id="memo-send">보내기</button>
             </div>
           </div>
 
@@ -353,6 +360,17 @@
         <button type="button" id="chulgo-carry-next">다음 달로 &rsaquo;</button>
         <div class="chulgo-spacer"></div>
         <button type="button" id="chulgo-carry-cancel">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="memo-alarm-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card">
+      <h4>⏰ 메모 알림</h4>
+      <p id="memo-alarm-text" class="memo-alarm-popup-text"></p>
+      <div class="chulgo-mini-actions">
+        <div class="chulgo-spacer"></div>
+        <button type="button" id="memo-alarm-close">확인</button>
       </div>
     </div>
   </div>

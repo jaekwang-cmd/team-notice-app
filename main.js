@@ -37,10 +37,8 @@ let isQuitting = false;
 let isPinned = false;
 let firebaseHandle = null;
 
-let unsubscribeAnnouncements = null;
-let knownAnnouncementIds = new Set();
-let knownShoutedAt = new Map();
-let isFirstAnnouncementSnapshot = true;
+let unsubscribeMemos = null;
+const memoAlarmTimers = new Map(); // memoId -> Timeout
 
 let unsubscribeAdmins = null;
 
@@ -118,58 +116,64 @@ function createTray() {
   });
 }
 
-// --- Announcements realtime ---
+// --- 개인 메모 + 시간 알람 realtime (다른 사람에게 공유되지 않음, 계정에만 저장) ---
 
-function startAnnouncementsSubscription() {
-  if (unsubscribeAnnouncements) return; // already subscribed
-  isFirstAnnouncementSnapshot = true;
-  knownAnnouncementIds = new Set();
-  knownShoutedAt = new Map();
-  unsubscribeAnnouncements = firebaseClient.subscribeToAnnouncements(
+function startMemosSubscription() {
+  if (unsubscribeMemos) return; // already subscribed
+  const user = firebaseHandle.auth.currentUser;
+  if (!user) return;
+  unsubscribeMemos = firebaseClient.subscribeToMemos(
     firebaseHandle.db,
-    handleAnnouncementsUpdate,
-    (err) => console.error('Firestore subscribe error:', err)
+    user.uid,
+    handleMemosUpdate,
+    (err) => console.error('메모 subscribe error:', err)
   );
 }
 
-function stopAnnouncementsSubscription() {
-  if (unsubscribeAnnouncements) {
-    unsubscribeAnnouncements();
-    unsubscribeAnnouncements = null;
+function stopMemosSubscription() {
+  if (unsubscribeMemos) {
+    unsubscribeMemos();
+    unsubscribeMemos = null;
   }
-  knownAnnouncementIds = new Set();
-  knownShoutedAt = new Map();
-  isFirstAnnouncementSnapshot = true;
-  if (mainWindow) mainWindow.webContents.send('announcements:update', []);
+  memoAlarmTimers.forEach((timer) => clearTimeout(timer));
+  memoAlarmTimers.clear();
+  if (mainWindow) mainWindow.webContents.send('memos:update', []);
 }
 
-function handleAnnouncementsUpdate(announcements) {
-  if (!isFirstAnnouncementSnapshot) {
-    const newOnes = announcements.filter((a) => !knownAnnouncementIds.has(a.id));
-    newOnes.forEach((a) => {
-      new Notification({
-        title: `📢 새 공지: ${a.author || '팀'}`,
-        body: a.text,
-      }).show();
-    });
+function fireMemoAlarm(memo) {
+  new Notification({ title: '⏰ 메모 알림', body: memo.text }).show();
+  if (mainWindow) mainWindow.webContents.send('memos:alarm', memo);
+  firebaseClient
+    .updateMemo(firebaseHandle.db, memo.id, { reminded: true })
+    .catch((err) => console.error('메모 알람 처리 실패:', err));
+}
 
-    announcements.forEach((a) => {
-      const prevShout = knownShoutedAt.get(a.id) || null;
-      if (knownAnnouncementIds.has(a.id) && a.shoutedAt && a.shoutedAt !== prevShout) {
-        new Notification({
-          title: `📢🔊 긴급 재알림: ${a.author || '관리자'}`,
-          body: a.text,
-        }).show();
-      }
-    });
+// Firestore 스냅샷이 올 때마다 아직 안 울린 remindAt 있는 메모들에 타이머를 걸어준다.
+// 앱이 꺼져있는 동안 지나버린 알람은, 켜지자마자 한 번 바로 울려서 놓치지 않게 한다.
+function handleMemosUpdate(memos) {
+  const currentIds = new Set(memos.map((m) => m.id));
+  for (const [id, timer] of memoAlarmTimers) {
+    if (!currentIds.has(id)) {
+      clearTimeout(timer);
+      memoAlarmTimers.delete(id);
+    }
   }
-  isFirstAnnouncementSnapshot = false;
-  knownAnnouncementIds = new Set(announcements.map((a) => a.id));
-  knownShoutedAt = new Map(announcements.map((a) => [a.id, a.shoutedAt]));
 
-  if (mainWindow) {
-    mainWindow.webContents.send('announcements:update', announcements);
-  }
+  memos.forEach((memo) => {
+    if (!memo.remindAt || memo.reminded || memoAlarmTimers.has(memo.id)) return;
+    const delay = memo.remindAt - Date.now();
+    if (delay <= 0) {
+      fireMemoAlarm(memo);
+      return;
+    }
+    const timer = setTimeout(() => {
+      memoAlarmTimers.delete(memo.id);
+      fireMemoAlarm(memo);
+    }, delay);
+    memoAlarmTimers.set(memo.id, timer);
+  });
+
+  if (mainWindow) mainWindow.webContents.send('memos:update', memos);
 }
 
 // --- Dynamic admin list realtime ---
@@ -352,7 +356,7 @@ function sleep(ms) {
 // not from here — this function's only job is to get Firebase signed in. Right after a
 // reboot, networking can still be settling, so a single failed attempt used to leave the
 // user looking "signed in" (their Google Calendar token was still cached locally) while
-// Firestore silently never connected — every subscription's data (announcements, the
+// Firestore silently never connected — every subscription's data (개인 메모, the
 // 출고 장부, etc.) stayed empty with no visible error. Retrying here closes that window.
 async function trySignInFirebaseFromStoredGoogleSession() {
   if (!firebaseHandle || !googleAuth.isSignedIn()) return;
@@ -376,13 +380,13 @@ async function trySignInFirebaseFromStoredGoogleSession() {
 function setupAuthStateListener() {
   firebaseClient.onAuthStateChangedListener(firebaseHandle.auth, (user) => {
     if (user) {
-      startAnnouncementsSubscription();
+      startMemosSubscription();
       startAdminsSubscription();
       startTeamEventsSubscription();
       startChulgoSubscription();
       reconcileTeamEventsForCurrentUser().catch((err) => console.error('팀 일정 재동기화 실패:', err));
     } else {
-      stopAnnouncementsSubscription();
+      stopMemosSubscription();
       stopAdminsSubscription();
       stopTeamEventsSubscription();
       stopChulgoSubscription();
@@ -457,7 +461,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   isQuitting = true;
-  stopAnnouncementsSubscription();
+  stopMemosSubscription();
   stopAdminsSubscription();
   stopTeamEventsSubscription();
   stopChulgoSubscription();
@@ -555,37 +559,24 @@ ipcMain.handle('admin:set-list', async (_e, emails) => {
   await firebaseClient.setAdmins(firebaseHandle.db, cleaned);
 });
 
-// --- Announcements ---
-ipcMain.handle('announcements:post', async (_e, text) => {
+// --- 개인 메모 (계정에만 저장, 다른 사람에게 공유되지 않음) ---
+ipcMain.handle('memos:create', async (_e, data) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
-  const user = firebaseHandle.auth.currentUser;
-  if (!user) throw new Error('NOT_SIGNED_IN');
-  const author = user.displayName || user.email || '익명';
-  await firebaseClient.postAnnouncement(firebaseHandle.db, { text, author, authorUid: user.uid });
+  const user = requireSignedInUser();
+  return firebaseClient.createMemo(firebaseHandle.db, { ...data, authorUid: user.uid });
 });
 
-ipcMain.handle('announcements:edit', async (_e, { id, text }) => {
+ipcMain.handle('memos:update', async (_e, { id, ...data }) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
-  await firebaseClient.updateAnnouncement(firebaseHandle.db, id, { text });
+  requireSignedInUser();
+  delete data.authorUid;
+  await firebaseClient.updateMemo(firebaseHandle.db, id, data);
 });
 
-ipcMain.handle('announcements:delete', async (_e, id) => {
+ipcMain.handle('memos:delete', async (_e, id) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
-  await firebaseClient.deleteAnnouncement(firebaseHandle.db, id);
-});
-
-ipcMain.handle('announcements:set-confirmed', async (_e, { id, confirmed }) => {
-  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
-  const user = firebaseHandle.auth.currentUser;
-  if (!user) throw new Error('NOT_SIGNED_IN');
-  const name = user.displayName || user.email || '익명';
-  await firebaseClient.setConfirmedBy(firebaseHandle.db, id, user.uid, name, confirmed);
-});
-
-ipcMain.handle('announcements:shout', async (_e, id) => {
-  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
-  requireAdmin();
-  await firebaseClient.shoutAnnouncement(firebaseHandle.db, id);
+  requireSignedInUser();
+  await firebaseClient.deleteMemo(firebaseHandle.db, id);
 });
 
 // --- Team-shared calendar events (admin manages; auto-synced into everyone's own calendar) ---
