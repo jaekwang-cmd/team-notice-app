@@ -1135,7 +1135,8 @@ table.chulgo-ledger {
   border-collapse: collapse;
   font-size: 12.5px;
   table-layout: fixed;
-  width: max-content;
+  width: 100%;
+  min-width: max-content;
 }
 
 table.chulgo-ledger th {
