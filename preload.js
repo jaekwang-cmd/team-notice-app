@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('api', {
   setChulgoPosition: (position) => ipcRenderer.invoke('chulgo:set-position', position),
   getChulgoPhone: () => ipcRenderer.invoke('chulgo:get-phone'),
   setChulgoPhone: (phone) => ipcRenderer.invoke('chulgo:set-phone', phone),
+  exportChulgoExcel: (payload) => ipcRenderer.invoke('chulgo:export-excel', payload),
   onChulgoUpdate: (callback) => {
     ipcRenderer.on('chulgo:update', (_event, entries) => callback(entries));
   },

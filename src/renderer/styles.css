@@ -994,6 +994,18 @@ body[data-card-style='3d'] .glass-card {
   overflow: hidden;
 }
 
+.chulgo-excel-card {
+  width: min(1500px, 96vw);
+  height: 86vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chulgo-excel-card .chulgo-table-wrap {
+  margin-top: 10px;
+}
+
 .chulgo-header {
   display: flex;
   align-items: center;

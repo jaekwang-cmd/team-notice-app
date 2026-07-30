@@ -3,6 +3,7 @@ const fs = require('fs');
 const { app, BrowserWindow, ipcMain, Notification, dialog, Tray, Menu, nativeImage } = require('electron');
 const Store = require('electron-store');
 const { autoUpdater } = require('electron-updater');
+const ExcelJS = require('exceljs');
 
 const koreanHolidays = require('./src/main/koreanHolidays');
 const googleAuth = require('./src/main/googleAuth');
@@ -658,4 +659,53 @@ ipcMain.handle('chulgo:delete', async (_e, id) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireSignedInUser();
   await firebaseClient.deleteChulgoEntry(firebaseHandle.db, id);
+});
+
+// 실제 회사 엑셀 템플릿을 그대로 로드해서 값만 채워넣는다 — 새로 스타일을 만들지
+// 않고 원본 서식(글씨체/굵기/테두리/행 높이 등)을 그대로 유지하기 위함.
+const CHULGO_EXPORT_TEMPLATE_PATH = path.join(__dirname, 'assets', 'chulgo-export-template.xlsx');
+
+ipcMain.handle('chulgo:export-excel', async (_e, { yearMonth, staffName, position, rows }) => {
+  const [year, month] = yearMonth.split('-').map(Number);
+  const staffLabel = [staffName, position].filter(Boolean).join(' ');
+
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(CHULGO_EXPORT_TEMPLATE_PATH);
+  const sheet = workbook.worksheets[0];
+  sheet.name = `${month}월 출고`;
+
+  sheet.getCell('A1').value = `에이원오토  // ${year}년 ${month}월 출고 현황 // `;
+  sheet.getCell('D3').value = staffLabel;
+
+  const startRow = 5;
+  rows.forEach((r, i) => {
+    const rowIndex = startRow + i;
+    const row = sheet.getRow(rowIndex);
+    row.getCell(1).value = i + 1; // 댓수
+    row.getCell(2).value = r.dbType || '';
+    row.getCell(3).value = r.company || '';
+    row.getCell(4).value = r.finType || '';
+    row.getCell(5).value = r.name || '';
+    row.getCell(6).value = r.car || '';
+    row.getCell(7).value = r.deployDate || '';
+    row.getCell(8).value = r.vehiclePrice || null;
+    row.getCell(9).value = r.fee || 0;
+    row.getCell(10).value = r.vehiclePrice
+      ? { formula: `IFERROR(I${rowIndex}/H${rowIndex},"")` }
+      : '';
+    row.getCell(11).value = staffName || '';
+    row.getCell(12).value = r.feeMethod || 'AG';
+    row.getCell(13).value = r.remark || '';
+    row.commit();
+  });
+
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: '출고현황 엑셀로 저장',
+    defaultPath: `${year}년 ${month}월_출고현황 3본부(${staffLabel}).xlsx`,
+    filters: [{ name: 'Excel 파일', extensions: ['xlsx'] }],
+  });
+  if (canceled || !filePath) return { canceled: true };
+
+  await workbook.xlsx.writeFile(filePath);
+  return { canceled: false, filePath };
 });

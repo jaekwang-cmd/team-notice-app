@@ -1689,6 +1689,145 @@ document.getElementById('chulgo-gen-settlement').addEventListener('click', () =>
   );
 });
 
+// --- 출고현황 미리보기 + 엑셀로 저장 ---
+// 엑셀에만 필요한 값(투입일/차량가격/CM·AG/대리점/비고)은 장부 자체엔 없는 필드라,
+// 여기서만 편집한다 — 편집 즉시 계정(Firestore)에 저장되고, "엑셀로 저장"을
+// 눌렀을 때 그 시점 값 그대로 실제 파일로 나간다.
+const chulgoExcelPopup = document.getElementById('chulgo-excel-popup');
+const chulgoExcelMonthLabel = document.getElementById('chulgo-excel-month-label');
+const chulgoExcelTableWrap = document.getElementById('chulgo-excel-table-wrap');
+
+function chulgoDefaultRemark(e) {
+  const hasPromo = Number(e.promo) > 0;
+  const hasAgency = Boolean(e.agency);
+  if (hasPromo && hasAgency) return '추가수수료 % / 대리점';
+  if (hasAgency) return '대리점';
+  if (hasPromo) return '추가수수료 %';
+  return '';
+}
+
+function renderChulgoExcelPreview() {
+  const ym = chulgoActiveMonth();
+  const list = chulgoEntries.filter((e) => e.month === ym).sort((a, b) => (a.order || 0) - (b.order || 0));
+  chulgoExcelMonthLabel.textContent = `${chulgoMonthLabel(ym)} — ${list.length}건`;
+
+  const rows = list
+    .map(
+      (e, i) => `
+    <tr data-id="${e.id}">
+      <td class="chulgo-check-cell">${i + 1}</td>
+      <td>${escapeHtml(e.dbType || '')}</td>
+      <td>${escapeHtml(e.company || '')}</td>
+      <td>${escapeHtml(e.finType || '')}</td>
+      <td>${escapeHtml(e.name || '')}</td>
+      <td>${escapeHtml(e.car || '')}</td>
+      <td><input type="text" data-key="deployDate" value="${(e.deployDate || '').replace(/"/g, '&quot;')}" placeholder="예: 7월 31일 예정"></td>
+      <td><input class="chulgo-money" type="text" inputmode="numeric" data-key="vehiclePrice" value="${chulgoFormatMoneyDisplay(e.vehiclePrice)}" placeholder="0"></td>
+      <td class="chulgo-computed">${chulgoWon(Number(e.fee) || 0)}</td>
+      <td>
+        <select data-key="feeMethod">
+          <option value="AG" ${(e.feeMethod || 'AG') === 'AG' ? 'selected' : ''}>AG</option>
+          <option value="CM" ${e.feeMethod === 'CM' ? 'selected' : ''}>CM</option>
+        </select>
+      </td>
+      <td class="chulgo-check-cell"><input type="checkbox" data-key="agency" ${e.agency ? 'checked' : ''} title="대리점"></td>
+      <td><input type="text" data-key="remark" value="${(e.remark != null ? e.remark : chulgoDefaultRemark(e)).replace(/"/g, '&quot;')}"></td>
+    </tr>
+  `
+    )
+    .join('');
+
+  chulgoExcelTableWrap.innerHTML = list.length
+    ? `
+    <table class="chulgo-ledger">
+      <thead><tr>
+        <th class="chulgo-check-cell">댓수</th>
+        <th>DB유형</th><th>금융사</th><th>렌트/리스</th><th>고객명</th><th>차종</th>
+        <th>투입일</th><th>차량가격</th><th>수수료</th><th>CM/AG</th>
+        <th class="chulgo-check-cell">대리점</th><th>비고</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `
+    : '<div class="chulgo-empty">이 달에는 출고 건이 없습니다.</div>';
+
+  chulgoExcelTableWrap.querySelectorAll('input.chulgo-money').forEach((el) => {
+    el.addEventListener('focus', () => {
+      el.value = chulgoParseMoneyRaw(el.value) || '';
+    });
+    el.addEventListener('blur', () => {
+      el.value = chulgoFormatMoneyDisplay(chulgoParseMoneyRaw(el.value));
+    });
+  });
+
+  chulgoExcelTableWrap.querySelectorAll('[data-key]').forEach((el) => {
+    const eventName = el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'change';
+    el.addEventListener(eventName, () => {
+      const id = el.closest('tr').dataset.id;
+      const key = el.dataset.key;
+      const value =
+        el.type === 'checkbox' ? el.checked : el.classList.contains('chulgo-money') ? chulgoParseMoneyRaw(el.value) : el.value;
+      const entry = chulgoEntries.find((x) => x.id === id);
+      if (entry) entry[key] = value; // optimistic — Firestore snapshot reconciles right after
+      if (key === 'agency' && entry) {
+        // 대리점 체크 상태가 바뀌면 아직 손대지 않은 비고 자리표시 문구도 같이 갱신
+        const row = el.closest('tr');
+        const remarkInput = row.querySelector('[data-key="remark"]');
+        if (remarkInput && entry.remark == null) remarkInput.value = chulgoDefaultRemark(entry);
+      }
+      chulgoUpdateField(id, key, value);
+    });
+  });
+}
+
+document.getElementById('chulgo-excel-preview-btn').addEventListener('click', () => {
+  renderChulgoExcelPreview();
+  chulgoExcelPopup.classList.remove('hidden');
+});
+
+document.getElementById('chulgo-excel-close').addEventListener('click', () => {
+  chulgoExcelPopup.classList.add('hidden');
+});
+
+document.getElementById('chulgo-excel-export').addEventListener('click', async () => {
+  const ym = chulgoActiveMonth();
+  const list = chulgoEntries.filter((e) => e.month === ym).sort((a, b) => (a.order || 0) - (b.order || 0));
+  if (!list.length) {
+    alert('이 달에는 출고 건이 없습니다.');
+    return;
+  }
+
+  const rows = list.map((e) => ({
+    dbType: e.dbType || '',
+    company: e.company || '',
+    finType: e.finType || '',
+    name: e.name || '',
+    car: e.car || '',
+    deployDate: e.deployDate || '',
+    vehiclePrice: Number(e.vehiclePrice) || 0,
+    fee: Number(e.fee) || 0,
+    feeMethod: e.feeMethod || 'AG',
+    remark: e.remark != null ? e.remark : chulgoDefaultRemark(e),
+  }));
+
+  const exportBtn = document.getElementById('chulgo-excel-export');
+  exportBtn.disabled = true;
+  try {
+    const result = await window.api.exportChulgoExcel({
+      yearMonth: ym,
+      staffName: currentUser.displayName || '',
+      position: chulgoPosition,
+      rows,
+    });
+    if (!result.canceled) alert(`저장했습니다.\n${result.filePath}`);
+  } catch (err) {
+    console.error('엑셀 내보내기 실패:', err);
+    alert('엑셀로 저장하는 데 실패했습니다.');
+  } finally {
+    exportBtn.disabled = false;
+  }
+});
+
 function chulgoBindResizers() {
   chulgoTableWrap.querySelectorAll('.chulgo-col-resizer').forEach((handle) => {
     handle.addEventListener('mousedown', (ev) => {

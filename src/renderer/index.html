@@ -290,6 +290,7 @@
         </div>
         <button id="chulgo-add-row" class="chulgo-primary-btn">+ 출고 건 추가</button>
         <button id="chulgo-carry-over" class="chulgo-mini-btn" disabled>이월하기</button>
+        <button id="chulgo-excel-preview-btn" class="chulgo-mini-btn">출고현황 미리보기</button>
         <div class="chulgo-spacer"></div>
         <div class="chulgo-position-field">
           <label for="chulgo-position-select">직책</label>
@@ -361,6 +362,23 @@
         <div class="chulgo-spacer"></div>
         <button type="button" id="chulgo-carry-cancel">취소</button>
       </div>
+    </div>
+  </div>
+
+  <div id="chulgo-excel-popup" class="settings-overlay hidden">
+    <div class="glass-card chulgo-excel-card">
+      <div class="chulgo-header">
+        <h3>📄 출고현황 미리보기</h3>
+        <span id="chulgo-excel-month-label" class="chulgo-month-count"></span>
+        <div class="chulgo-spacer"></div>
+        <button id="chulgo-excel-export" class="chulgo-primary-btn">엑셀로 저장</button>
+        <button id="chulgo-excel-close" class="nav-btn">✕</button>
+      </div>
+      <p class="chulgo-mini-hint">
+        투입일 / 차량가격 / CM·AG / 대리점 / 비고는 여기서 자유롭게 수정 가능하고, 수정 내용은 계정에 자동 저장돼요.
+        고객명·차종·금융사 등 나머지 값은 위 장부 내용을 그대로 따라가요. "엑셀로 저장"을 눌러야 실제 파일로 나가요.
+      </p>
+      <div class="chulgo-table-wrap" id="chulgo-excel-table-wrap"></div>
     </div>
   </div>
 
