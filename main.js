@@ -672,7 +672,9 @@ ipcMain.handle('chulgo:export-excel', async (_e, { yearMonth, staffName, positio
   const staffLabel = [staffName, position].filter(Boolean).join(' ');
 
   const workbook = new ExcelJS.Workbook();
+  console.log('[chulgo-export] reading template:', CHULGO_EXPORT_TEMPLATE_PATH, fs.existsSync(CHULGO_EXPORT_TEMPLATE_PATH));
   await workbook.xlsx.readFile(CHULGO_EXPORT_TEMPLATE_PATH);
+  console.log('[chulgo-export] template read OK, worksheets:', workbook.worksheets.map((w) => w.name));
   const sheet = workbook.worksheets[0];
   sheet.name = `${month}월 출고`;
 
@@ -710,6 +712,8 @@ ipcMain.handle('chulgo:export-excel', async (_e, { yearMonth, staffName, positio
   });
   if (canceled || !filePath) return { canceled: true };
 
+  console.log('[chulgo-export] writing to:', filePath);
   await workbook.xlsx.writeFile(filePath);
+  console.log('[chulgo-export] write OK');
   return { canceled: false, filePath };
 });
