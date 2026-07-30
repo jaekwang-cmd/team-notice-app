@@ -1277,6 +1277,26 @@ table.chulgo-ledger th {
   text-align: center !important;
 }
 
+.chulgo-drag-handle {
+  text-align: center !important;
+  cursor: grab;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  user-select: none;
+}
+
+.chulgo-drag-handle:active {
+  cursor: grabbing;
+}
+
+table.chulgo-ledger tbody tr.dragging {
+  opacity: 0.4;
+}
+
+table.chulgo-ledger tbody tr.drag-over {
+  box-shadow: inset 0 2px 0 var(--color-accent);
+}
+
 table.chulgo-ledger th.chulgo-check-cell {
   font-size: 10px;
   white-space: normal;

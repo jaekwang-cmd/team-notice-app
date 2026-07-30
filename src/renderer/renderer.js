@@ -889,11 +889,23 @@ const chulgoPositionSelect = document.getElementById('chulgo-position-select');
 const chulgoPhoneInput = document.getElementById('chulgo-phone-input');
 
 const CHULGO_COLW_KEY = 'chulgo_colwidths_v1';
+// 실제 "출고 현황" 엑셀 템플릿의 P열(금융사 작성예시)과 완전히 동일한 목록 +
+// 별도로 요청받은 4개 변형(중고/다이렉트/특수/영등포 지점) — 엑셀 추출 시 이 목록에
+// 있는 이름 그대로 나가야 하므로, 자유 텍스트 대신 드롭다운으로 강제한다.
+const CHULGO_COMPANY_LIST = [
+  '하나캐피탈', '하나캐피탈(다이렉트)', 'KB캐피탈', 'IM캐피탈', 'BNK캐피탈', 'MG캐피탈',
+  '신한카드', '신한카드(중고)', '롯데렌터카', '농협캐피탈', '메리츠캐피탈', '우리금융캐피탈',
+  '오릭스캐피탈', '현대캐피탈', '현대캐피탈(영등포)', '현대캐피탈(특수)', 'JB우리캐피탈', '롯데캐피탈',
+  '산은캐피탈', '롯데오토리스', '우리카드', '삼성카드', '하모니렌터카', 'SK렌터카', '아마존카',
+  '레드캡', '케이카', '에이원렌터카', '오토핸즈', 'BMW파이낸셜', '벤츠파이낸셜', '아우디파이낸셜',
+  '일시불', '할부',
+];
+
 const CHULGO_COLS = [
   { key: 'finType', label: '금융정보', type: 'select', options: ['리스', '렌트', '일시불', '기타'], w: 90 },
   { key: 'name', label: '고객명', type: 'text', w: 150 },
   { key: 'car', label: '차종', type: 'text', w: 120 },
-  { key: 'company', label: '금융사', type: 'text', w: 130 },
+  { key: 'company', label: '금융사', type: 'select', options: CHULGO_COMPANY_LIST, w: 150 },
   { key: 'fee', label: '수수료', type: 'money', w: 120 },
   { key: 'promo', label: '프로모션', type: 'money', w: 115 },
   { key: 'agencyFee', label: '대리점수당', type: 'money', w: 120 },
@@ -904,6 +916,7 @@ const CHULGO_COLS = [
 const CHULGO_COMPUTED_W = 150;
 const CHULGO_ACTION_W = 66;
 const CHULGO_CHECK_W = 42;
+const CHULGO_DRAG_W = 24;
 
 const CHULGO_POSITION_RATES = { 주임: 0.4, 대리: 0.4, 과장: 0.5, 차장: 0.5, 팀장: 0.5 };
 const CHULGO_POSITION_STIPEND = { 주임: 0, 대리: 0, 과장: 0, 차장: 500000, 팀장: 1000000 };
@@ -1034,7 +1047,10 @@ function renderChulgoStats() {
 function chulgoCellHTML(e, col) {
   const val = e[col.key] ?? (col.type === 'money' ? 0 : '');
   if (col.type === 'select') {
-    const opts = col.options.map((o) => `<option value="${o}" ${o === val ? 'selected' : ''}>${o}</option>`).join('');
+    // 예전에 자유 텍스트로 써놓은 값이 지금 옵션 목록에 없으면(예: 오타, 옛날 방식 표기),
+    // 그 값을 그냥 없애버리지 않도록 맨 앞에 임시 옵션으로 얹어서 보존한다.
+    const options = val && !col.options.includes(val) ? [val, ...col.options] : col.options;
+    const opts = options.map((o) => `<option value="${o}" ${o === val ? 'selected' : ''}>${o}</option>`).join('');
     const cls = val === '완료' ? 'chulgo-status-완료' : val === '예정' ? 'chulgo-status-예정' : '';
     return `<select class="${cls}" data-id="${e.id}" data-key="${col.key}">${opts}</select>`;
   }
@@ -1046,7 +1062,7 @@ function chulgoCellHTML(e, col) {
 
 function chulgoBuildColgroup() {
   const cols = CHULGO_COLS.map((c) => `<col style="width:${chulgoWidthFor(c.key, c.w)}px">`).join('');
-  return `<colgroup><col style="width:${CHULGO_CHECK_W}px">${cols}<col style="width:${chulgoWidthFor('_computed', CHULGO_COMPUTED_W)}px"><col style="width:${CHULGO_ACTION_W}px"></colgroup>`;
+  return `<colgroup><col style="width:${CHULGO_DRAG_W}px"><col style="width:${CHULGO_CHECK_W}px">${cols}<col style="width:${chulgoWidthFor('_computed', CHULGO_COMPUTED_W)}px"><col style="width:${CHULGO_ACTION_W}px"></colgroup>`;
 }
 
 function chulgoFriendlyError(err) {
@@ -1099,6 +1115,7 @@ function renderChulgo() {
     .map(
       (e) => `
     <tr data-row-id="${e.id}" class="${e.id === chulgoSelectedId ? 'selected' : ''}">
+      <td class="chulgo-drag-handle" draggable="true" title="드래그해서 순서 변경">⠿</td>
       <td class="chulgo-check-cell"><input type="checkbox" class="chulgo-quota-check" data-id="${e.id}" ${e.countsQuota !== false ? 'checked' : ''} title="댓수 인정"></td>
       ${CHULGO_COLS.map((c) => `<td>${chulgoCellHTML(e, c)}</td>`).join('')}
       <td class="chulgo-computed">${chulgoWon(chulgoComputedFee(e))}</td>
@@ -1117,13 +1134,14 @@ function renderChulgo() {
     <table class="chulgo-ledger">
       ${chulgoBuildColgroup()}
       <thead><tr>
+        <th></th>
         <th class="chulgo-check-cell">인정댓수</th>
         ${CHULGO_COLS.map((c) => `<th data-key="${c.key}">${c.label}<span class="chulgo-col-resizer" data-key="${c.key}"></span></th>`).join('')}
         <th data-key="_computed">공제후총수수료<span class="chulgo-col-resizer" data-key="_computed"></span></th>
         <th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr><td colspan="${CHULGO_COLS.length + 1}">월 합계</td><td>${chulgoWon(monthTotal)}</td><td></td></tr></tfoot>
+      <tfoot><tr><td colspan="${CHULGO_COLS.length + 2}">월 합계</td><td>${chulgoWon(monthTotal)}</td><td></td></tr></tfoot>
     </table>
   `;
 
@@ -1221,8 +1239,67 @@ function renderChulgo() {
     });
   });
 
+  chulgoBindDragReorder();
   chulgoBindResizers();
   chulgoUpdateActionRowState();
+}
+
+// --- 행 순서 드래그로 바꾸기 (실제 출고 순서대로 위아래 재배열) ---
+let chulgoDragSourceId = null;
+
+function chulgoBindDragReorder() {
+  chulgoTableWrap.querySelectorAll('.chulgo-drag-handle').forEach((handle) => {
+    handle.addEventListener('dragstart', (ev) => {
+      const tr = handle.closest('tr');
+      chulgoDragSourceId = tr.dataset.rowId;
+      ev.dataTransfer.effectAllowed = 'move';
+      tr.classList.add('dragging');
+    });
+    handle.addEventListener('dragend', () => {
+      chulgoTableWrap.querySelectorAll('tr.dragging').forEach((tr) => tr.classList.remove('dragging'));
+      chulgoDragSourceId = null;
+    });
+  });
+
+  chulgoTableWrap.querySelectorAll('tr[data-row-id]').forEach((tr) => {
+    tr.addEventListener('dragover', (ev) => {
+      if (!chulgoDragSourceId) return;
+      ev.preventDefault();
+      tr.classList.add('drag-over');
+    });
+    tr.addEventListener('dragleave', () => tr.classList.remove('drag-over'));
+    tr.addEventListener('drop', async (ev) => {
+      ev.preventDefault();
+      tr.classList.remove('drag-over');
+      const targetId = tr.dataset.rowId;
+      const sourceId = chulgoDragSourceId;
+      chulgoDragSourceId = null;
+      if (!sourceId || sourceId === targetId) return;
+      await chulgoReorderRows(sourceId, targetId);
+    });
+  });
+}
+
+async function chulgoReorderRows(sourceId, targetId) {
+  const ym = chulgoActiveMonth();
+  const list = chulgoEntries.filter((x) => x.month === ym).sort((a, b) => (a.order || 0) - (b.order || 0));
+  const fromIndex = list.findIndex((x) => x.id === sourceId);
+  const toIndex = list.findIndex((x) => x.id === targetId);
+  if (fromIndex === -1 || toIndex === -1) return;
+
+  const [moved] = list.splice(fromIndex, 1);
+  list.splice(toIndex, 0, moved);
+  list.forEach((entry, i) => {
+    entry.order = i; // optimistic — Firestore snapshot reconciles right after
+  });
+  renderChulgo();
+
+  try {
+    await Promise.all(list.map((entry) => window.api.updateChulgoEntry({ id: entry.id, order: entry.order })));
+  } catch (err) {
+    console.error('순서 변경 저장 실패:', err);
+    alert(chulgoFriendlyError(err));
+  }
 }
 
 // --- 문구 생성 (계약보고 / 투입보고 / 계약내용 안내문자 / 커넥티드 안내문자 / 정리문구) ---
@@ -1256,6 +1333,11 @@ const CHULGO_FINANCE_CENTER = {
   산은캐피탈: { call: '1899-6114', accident: '', succession: '1899-6114' },
   오토핸즈: { call: '1800-5873', accident: '1800-5873', succession: '' },
   롯데오토리스: { call: '1899-8700', accident: '', succession: '1899-8700( 1 -> 1-> 4 )' },
+  // 이름만 다른 지점/상품 변형 — 연락처는 본점과 동일
+  '신한카드(중고)': { call: '1544-7100', accident: '1544-7751', succession: '1544-7100' },
+  '하나캐피탈(다이렉트)': { call: '1800-1110', accident: '1688-2040', succession: '02-2037-1390' },
+  '현대캐피탈(특수)': { call: '1588-2114', accident: '1588-2114', succession: '1588-2114' },
+  '현대캐피탈(영등포)': { call: '1588-2114', accident: '1588-2114', succession: '1588-2114' },
 };
 
 // 자주 쓰는 줄임말 → 위 표의 정식 명칭 (장부에 짧게 써놔도 알아서 찾도록)
