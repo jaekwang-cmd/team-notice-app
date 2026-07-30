@@ -1403,6 +1403,14 @@ table.chulgo-ledger tbody tr {
   margin-bottom: 8px;
 }
 
+.chulgo-carry-card {
+  width: 320px;
+}
+
+.chulgo-carry-card .chulgo-mini-actions button {
+  white-space: nowrap;
+}
+
 .chulgo-mini-hint {
   font-size: 11px;
   color: var(--color-text-secondary);

@@ -1399,7 +1399,43 @@ function chulgoUpdateActionRowState() {
   document.getElementById('chulgo-action-hint').textContent = entry
     ? `선택됨: ${entry.name || '(이름 없음)'}`
     : '행을 클릭해서 선택하세요';
+  document.getElementById('chulgo-carry-over').disabled = !entry;
 }
+
+// --- 이월하기: 선택된 건을 이전/다음 달로 옮긴다 (복사가 아니라 이동 — month 값만 바꾸면
+// 원래 달 목록에서는 자동으로 빠지고, 대상 달 목록에는 자동으로 들어온다) ---
+const chulgoCarryPopup = document.getElementById('chulgo-carry-popup');
+
+document.getElementById('chulgo-carry-over').addEventListener('click', () => {
+  if (!chulgoSelectedEntry()) return;
+  chulgoCarryPopup.classList.remove('hidden');
+});
+
+document.getElementById('chulgo-carry-cancel').addEventListener('click', () => {
+  chulgoCarryPopup.classList.add('hidden');
+});
+
+async function chulgoCarryOver(delta) {
+  const entry = chulgoSelectedEntry();
+  if (!entry) return;
+  const targetMonth = chulgoShiftMonth(entry.month, delta);
+  const order = chulgoEntries.filter((x) => x.month === targetMonth).length;
+  chulgoCarryPopup.classList.add('hidden');
+  try {
+    await window.api.updateChulgoEntry({ id: entry.id, month: targetMonth, order });
+  } catch (err) {
+    console.error('이월 실패:', err);
+    alert(chulgoFriendlyError(err));
+    return;
+  }
+  entry.month = targetMonth;
+  entry.order = order;
+  chulgoSelectedId = null; // moved out of the currently viewed month
+  renderChulgo();
+}
+
+document.getElementById('chulgo-carry-prev').addEventListener('click', () => chulgoCarryOver(-1));
+document.getElementById('chulgo-carry-next').addEventListener('click', () => chulgoCarryOver(1));
 
 // --- 메모 팝업 (계약기간 / 주행거리 / 초기자금) ---
 const chulgoMemoPopup = document.getElementById('chulgo-memo-popup');

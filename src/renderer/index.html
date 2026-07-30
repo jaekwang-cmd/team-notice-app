@@ -282,6 +282,7 @@
           <button class="nav-btn" id="chulgo-next-month">&rsaquo;</button>
         </div>
         <button id="chulgo-add-row" class="chulgo-primary-btn">+ 출고 건 추가</button>
+        <button id="chulgo-carry-over" class="chulgo-mini-btn" disabled>이월하기</button>
         <div class="chulgo-spacer"></div>
         <div class="chulgo-position-field">
           <label for="chulgo-position-select">직책</label>
@@ -340,6 +341,18 @@
         <span id="chulgo-result-copied" class="chulgo-mini-hint"></span>
         <div class="chulgo-spacer"></div>
         <button type="button" id="chulgo-result-close">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="chulgo-carry-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card chulgo-carry-card">
+      <h4 id="chulgo-carry-title">이월하기</h4>
+      <div class="chulgo-mini-actions">
+        <button type="button" id="chulgo-carry-prev">&lsaquo; 이전 달로</button>
+        <button type="button" id="chulgo-carry-next">다음 달로 &rsaquo;</button>
+        <div class="chulgo-spacer"></div>
+        <button type="button" id="chulgo-carry-cancel">취소</button>
       </div>
     </div>
   </div>
