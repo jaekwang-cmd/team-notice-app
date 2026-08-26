@@ -1,5 +1,5 @@
 const { initializeApp } = require('firebase/app');
-const { getAuth, GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged } = require('firebase/auth');
+const { getAuth, GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged, deleteUser } = require('firebase/auth');
 const {
   getFirestore,
   collection,
@@ -62,6 +62,30 @@ function subscribeToAdmins(db, onUpdate, onError) {
 
 async function setAdmins(db, emails) {
   await setDoc(doc(db, 'settings', 'admins'), { emails }, { merge: true });
+}
+
+// --- 계정 삭제 (Google Play "계정 삭제" 정책 대응) ---
+// 로그인 정보(Firebase Auth 계정) 자체와 관리자 목록에 남은 이메일만 지운다.
+// 출고/정산 기록(chulgoEntries)은 세무·회계 보존이 필요한 회사 자료라 여기서 지우지
+// 않는다 — 삭제 확인 문구에도 이 사실을 그대로 안내한다. deleteUser는 마지막 로그인이
+// 오래됐으면 auth/requires-recent-login으로 실패할 수 있는데, 그건 호출한 쪽(main.js)이
+// 구분해서 재로그인을 안내한다.
+async function deleteFirebaseAccount(auth, db) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('NOT_SIGNED_IN');
+  const email = (user.email || '').toLowerCase();
+  try {
+    const adminsRef = doc(db, 'settings', 'admins');
+    const snap = await getDoc(adminsRef);
+    const emails = (snap.exists() && snap.data().emails) || [];
+    if (email && emails.includes(email)) {
+      await setDoc(adminsRef, { emails: emails.filter((e) => e !== email) }, { merge: true });
+    }
+  } catch (err) {
+    // 관리자 목록 정리는 부수 작업이라, 실패해도 계정 삭제 자체는 계속 진행한다.
+    console.error('[account-delete] 관리자 목록 정리 실패(계속 진행):', err);
+  }
+  await deleteUser(user);
 }
 
 // --- Team-shared calendar events ---
@@ -252,6 +276,7 @@ module.exports = {
   onAuthStateChangedListener,
   subscribeToAdmins,
   setAdmins,
+  deleteFirebaseAccount,
   subscribeToTeamEvents,
   createTeamEvent,
   updateTeamEvent,

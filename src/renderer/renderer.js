@@ -1336,6 +1336,80 @@ document.getElementById('settings-close').onclick = () => {
   settingsPanel.classList.add('hidden');
 };
 
+// --- 계정 삭제 (Google Play 정책 대응) ---
+const accountDeletePopup = document.getElementById('account-delete-popup');
+const accountDeleteEmailEl = document.getElementById('account-delete-email');
+const accountDeleteConfirmInput = document.getElementById('account-delete-confirm-input');
+const accountDeleteConfirmBtn = document.getElementById('account-delete-confirm-btn');
+const accountDeleteStatus = document.getElementById('account-delete-status');
+
+function accountDeleteResetInputState() {
+  accountDeleteConfirmBtn.disabled = accountDeleteConfirmInput.value.trim() !== '삭제';
+}
+
+document.getElementById('account-delete-open').addEventListener('click', () => {
+  if (!currentUser.signedIn) {
+    showToast('로그인 상태에서만 계정을 삭제할 수 있습니다.');
+    return;
+  }
+  accountDeleteEmailEl.textContent = currentUser.email || '';
+  accountDeleteConfirmInput.value = '';
+  accountDeleteConfirmBtn.disabled = true;
+  accountDeleteStatus.textContent = '';
+  settingsPanel.classList.add('hidden');
+  accountDeletePopup.classList.remove('hidden');
+});
+
+document.getElementById('account-delete-cancel-btn').addEventListener('click', () => {
+  accountDeletePopup.classList.add('hidden');
+});
+
+accountDeleteConfirmInput.addEventListener('input', accountDeleteResetInputState);
+
+function accountDeleteFinishSignedOutUI() {
+  isGoogleSignedIn = false;
+  currentUser = { signedIn: false, uid: null, isAdmin: false };
+  renderGoogleStatus();
+  updateNoticeInputState();
+  renderMemos();
+  renderCalendar();
+}
+
+accountDeleteConfirmBtn.addEventListener('click', async () => {
+  accountDeleteConfirmBtn.disabled = true;
+  accountDeleteStatus.textContent = '삭제 중...';
+  try {
+    await window.api.deleteAccount();
+    accountDeletePopup.classList.add('hidden');
+    accountDeleteFinishSignedOutUI();
+    showToast('계정이 삭제되었습니다.');
+    return;
+  } catch (err) {
+    if (!(err.message || '').includes('REQUIRES_RECENT_LOGIN')) {
+      console.error('계정 삭제 실패:', err);
+      accountDeleteStatus.textContent = '삭제에 실패했습니다. 다시 시도해주세요.';
+      accountDeleteResetInputState();
+      return;
+    }
+  }
+  // 보안을 위해 마지막 로그인이 오래되면 삭제가 막힌다 — 다시 로그인만 한 번 더 시키고
+  // 자동으로 재시도한다(사용자가 또 버튼을 누를 필요 없게).
+  accountDeleteStatus.textContent = '보안을 위해 다시 로그인해주세요...';
+  try {
+    await window.api.googleSignIn();
+    currentUser = await window.api.getCurrentUser();
+    accountDeleteStatus.textContent = '다시 삭제 시도 중...';
+    await window.api.deleteAccount();
+    accountDeletePopup.classList.add('hidden');
+    accountDeleteFinishSignedOutUI();
+    showToast('계정이 삭제되었습니다.');
+  } catch (err2) {
+    console.error('재로그인 후 계정 삭제 실패:', err2);
+    accountDeleteStatus.textContent = '삭제에 실패했습니다. 다시 시도해주세요.';
+    accountDeleteResetInputState();
+  }
+});
+
 document.getElementById('settings-save').onclick = async () => {
   await window.api.setAutostart(autostartToggle.checked);
   const theme = currentThemeFromForm();

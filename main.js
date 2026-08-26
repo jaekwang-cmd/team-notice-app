@@ -667,6 +667,9 @@ const CHANGELOG = {
   '0.34.7': [
     '"비고 / 할부·렌트·리스·총합" 문구 위치를 51행이 아니라 이미 병합돼 있던 148~149행으로 옮기고, 그 칸에 노란 배경을 채웠습니다',
   ],
+  '0.35.0': [
+    '🆕 설정에 "계정 삭제" 기능을 추가했습니다 — 로그인 정보를 삭제할 수 있고, 출고/정산 기록은 세무·회계 보존 목적으로 회사 자료로 남습니다(향후 모바일/Play스토어 배포를 위한 준비 작업)',
+  ],
 };
 
 function compareVersions(a, b) {
@@ -963,6 +966,24 @@ ipcMain.handle('admin:set-list', async (_e, emails) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   const cleaned = emails.map((e) => e.trim().toLowerCase()).filter(Boolean);
   await firebaseClient.setAdmins(firebaseHandle.db, cleaned);
+});
+
+// --- 계정 삭제 (Google Play 정책 대응) — 로그인 계정만 지우고, 출고/정산 기록은
+// 회사 보존 자료라 그대로 둔다(firebaseClient.deleteFirebaseAccount 주석 참고).
+ipcMain.handle('auth:delete-account', async () => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  if (!firebaseHandle.auth.currentUser) throw new Error('NOT_SIGNED_IN');
+  try {
+    await firebaseClient.deleteFirebaseAccount(firebaseHandle.auth, firebaseHandle.db);
+  } catch (err) {
+    if (err && err.code === 'auth/requires-recent-login') {
+      throw new Error('REQUIRES_RECENT_LOGIN');
+    }
+    console.error('[auth:delete-account] 실패:', err);
+    throw new Error('계정 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.');
+  }
+  googleAuth.signOut();
+  return { deleted: true };
 });
 
 // --- 개인 메모 (계정에만 저장, 다른 사람에게 공유되지 않음) ---

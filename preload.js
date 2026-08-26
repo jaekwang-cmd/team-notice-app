@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
 
   getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
   refreshAuth: () => ipcRenderer.invoke('auth:refresh'),
+  deleteAccount: () => ipcRenderer.invoke('auth:delete-account'),
 
   getAdminList: () => ipcRenderer.invoke('admin:get-list'),
   setAdminList: (emails) => ipcRenderer.invoke('admin:set-list', emails),

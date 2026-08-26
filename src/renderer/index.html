@@ -424,9 +424,36 @@
         <button id="admin-save-btn" class="theme-reset-btn">관리자 목록 저장</button>
       </div>
 
+      <h3 class="theme-section-title">계정</h3>
+      <div id="account-delete-section">
+        <p class="field-label">
+          계정을 삭제하면 로그인 정보와 개인 식별 정보가 삭제됩니다. 다만 출고/정산
+          기록은 세무·회계 보존 목적으로 회사 자료로 계속 남습니다.
+        </p>
+        <button id="account-delete-open" class="theme-reset-btn account-delete-btn">계정 삭제</button>
+      </div>
+
       <div class="settings-actions">
         <button id="settings-save">저장</button>
         <button id="settings-close">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="account-delete-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card modal-sm">
+      <h4>계정 삭제</h4>
+      <p class="chulgo-mini-hint">
+        <strong id="account-delete-email"></strong> 계정을 삭제합니다. 로그인 정보와 개인
+        식별 정보는 삭제되고, 출고/정산 기록은 세무·회계 보존 목적으로 회사 자료로 남습니다.
+        이 작업은 되돌릴 수 없습니다.
+      </p>
+      <p class="chulgo-mini-hint">확인을 위해 아래에 <strong>삭제</strong>를 입력해주세요.</p>
+      <input type="text" id="account-delete-confirm-input" placeholder="삭제" />
+      <div class="chulgo-mini-actions">
+        <button type="button" id="account-delete-confirm-btn" class="btn btn-danger" disabled>계정 삭제</button>
+        <button type="button" id="account-delete-cancel-btn">취소</button>
+        <span id="account-delete-status" class="chulgo-mini-hint"></span>
       </div>
     </div>
   </div>
