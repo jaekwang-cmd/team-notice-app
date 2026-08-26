@@ -12,5 +12,8 @@
     "clientSecret": "YOUR_GOOGLE_OAUTH_CLIENT_SECRET",
     "redirectPort": 43117
   },
-  "adminEmails": ["admin@example.com"]
+  "adminEmails": ["admin@example.com"],
+  "openai": {
+    "apiKey": "YOUR_OPENAI_API_KEY"
+  }
 }

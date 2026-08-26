@@ -1,0 +1,46 @@
+/* 분리형 "할 일" 위젯 — 메인 캘린더 창과 똑같은 배경/색상 토큰을 쓰되, 사이드바가 아니라
+   창 전체를 채우는 독립 레이아웃으로 다시 짠다. */
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+.tasks-widget-body {
+  background: var(--color-app-bg);
+  font-family: var(--font-family);
+}
+
+.tasks-widget {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
+  box-sizing: border-box;
+  gap: var(--space-2);
+}
+
+.tasks-widget .notice-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.widget-signin-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.widget-signin-banner button {
+  flex-shrink: 0;
+}

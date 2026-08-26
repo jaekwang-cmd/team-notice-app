@@ -3,15 +3,53 @@
 <head>
   <meta charset="UTF-8" />
   <title>스케줄 캘린더</title>
+  <!-- 앱 전체 기본 서체 — 한글 UI에 많이 쓰이는 모던한 무료 서체(가변 폰트).
+       인터넷이 없으면 그냥 시스템 기본 서체로 조용히 대체된다(기능엔 영향 없음).
+       일반 <link rel="stylesheet">는 이게 다 받아질 때까지 첫 화면 자체를 막는다 —
+       preload로 받아두고 다 받아진 뒤에만 stylesheet로 전환해서, 느린 네트워크에서도
+       앱이 먼저 뜨고 폰트는 나중에 조용히 바뀌게 한다. -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" onload="this.onload=null;this.rel='stylesheet'" />
+  <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" /></noscript>
+  <!-- 추가 글꼴 선택지(설정 > 글씨체) — Pretendard와 같은 방식: preload로 받아두고
+       다 받아진 뒤에만 stylesheet로 전환, 인터넷이 없으면 시스템 기본 서체로 조용히
+       대체된다. 굵기는 실제 쓰는 4단계(400/500/600/700)만 요청해서 용량을 줄였다.
+       둘 다 재배포가 허용된 오픈소스 라이선스(SIL OFL 1.1)의 글꼴이다. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" /></noscript>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" /></noscript>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app-bg">
+    <nav class="app-sidebar" id="app-sidebar">
+      <button class="sidebar-nav-btn active" data-view="calendar" title="캘린더">
+        <span class="sidebar-nav-icon">📅</span><span class="sidebar-nav-label">캘린더</span>
+      </button>
+      <button class="sidebar-nav-btn" data-view="memo" title="메모장">
+        <span class="sidebar-nav-icon">📝</span><span class="sidebar-nav-label">메모장</span>
+      </button>
+      <button class="sidebar-nav-btn" data-view="ai" title="AI 어시스턴트">
+        <span class="sidebar-nav-icon">✨</span><span class="sidebar-nav-label">AI 어시스턴트</span>
+      </button>
+      <button class="sidebar-nav-btn" data-view="chulgo" title="정산장부">
+        <span class="sidebar-nav-icon">📋</span><span class="sidebar-nav-label">정산장부</span>
+      </button>
+      <button class="sidebar-nav-btn" data-view="compare" title="비교시트">
+        <span class="sidebar-nav-icon">📊</span><span class="sidebar-nav-label">비교시트</span>
+      </button>
+    </nav>
+
+    <div class="app-main-col">
     <div class="titlebar">
       <span class="app-title">🗓️ 스케줄 캘린더</span>
+      <button id="app-version-badge" class="app-version-badge" title="클릭해서 업데이트 확인">v...</button>
+      <div class="titlebar-shortcuts" id="titlebar-shortcuts"></div>
       <div class="window-controls">
-        <button id="btn-pin" title="창 고정 (항상 위 + 이동 잠금)">📌</button>
-        <button id="btn-chulgo" title="출고 관리 장부">📋</button>
+        <button id="btn-pin" title="창 위치 고정 (이동 잠금)">📌</button>
         <button id="btn-settings" title="설정">⚙️</button>
         <button id="btn-minimize" title="최소화">—</button>
         <button id="btn-close" title="닫기">✕</button>
@@ -22,30 +60,15 @@
       ⚠️ Firebase / Google 설정이 필요합니다. <code>config/config.json</code>을 채워주세요. (README 참고)
     </div>
 
-    <div class="content">
+    <div class="content" data-view-pane="calendar">
       <section class="glass-card calendar-card">
         <div class="calendar-row">
-          <div class="notice-sidebar">
-            <h3>📝 메모장</h3>
-            <div class="notice-list" id="memo-list"></div>
-            <div class="memo-alarm-row">
-              <label class="memo-alarm-toggle">
-                <input type="checkbox" id="memo-alarm-enable" />
-                <span>⏰ 시간 설정하기</span>
-              </label>
-              <input type="time" id="memo-alarm-time" class="hidden" />
-            </div>
-            <div class="notice-input">
-              <input id="memo-text" type="text" placeholder="메모를 입력하세요..." maxlength="500" />
-              <button id="memo-send">보내기</button>
-            </div>
-          </div>
-
           <div class="calendar-main">
             <div class="calendar-header">
               <button id="prev-month" class="nav-btn">‹</button>
               <h2 id="calendar-title">-</h2>
               <div class="header-right">
+                <button id="calendar-only-toggle" class="nav-btn" title="캘린더만 보기 (일정 패널 숨기기)">⛶</button>
                 <button id="sync-btn" class="nav-btn" title="구글 캘린더 새로고침">⟳</button>
                 <button id="next-month" class="nav-btn">›</button>
               </div>
@@ -58,14 +81,13 @@
           </div>
 
           <div id="day-panel" class="day-panel">
+            <div id="day-panel-resizer" class="day-panel-resizer" title="드래그해서 너비 조절"></div>
             <div class="day-panel-header">
               <h3 id="day-panel-title">날짜를 선택하세요</h3>
               <button id="day-panel-close" class="nav-btn">✕</button>
             </div>
 
-            <div class="day-event-list" id="day-event-list">
-              <div class="day-event-empty">날짜를 클릭하면 일정이 여기에 표시됩니다.</div>
-            </div>
+            <button id="event-add-btn" class="add-event-btn hidden">+ 일정 추가</button>
 
             <form id="event-form" class="event-form hidden">
               <input id="event-title" type="text" placeholder="일정 제목" maxlength="200" />
@@ -81,16 +103,150 @@
                 <span>👥 팀 일정으로 업로드 (전체 공유)</span>
                 <input type="checkbox" id="event-team-share" />
               </label>
+              <div class="event-color-row" id="event-color-row">
+                <span class="event-color-label">색상</span>
+                <div class="event-color-swatches" id="event-color-swatches"></div>
+              </div>
               <div class="event-form-actions">
                 <button type="submit" id="event-save">저장</button>
                 <button type="button" id="event-cancel">취소</button>
               </div>
             </form>
 
-            <button id="event-add-btn" class="add-event-btn hidden">+ 일정 추가</button>
+            <div class="day-event-list" id="day-event-list">
+              <div class="day-event-empty">날짜를 클릭하면 일정이 여기에 표시됩니다.</div>
+            </div>
           </div>
         </div>
       </section>
+    </div>
+
+    <div id="memo-panel" class="view-panel hidden" data-view-pane="memo">
+      <div class="glass-card memo-card">
+        <div class="chulgo-header">
+          <h3>📝 메모장 <span id="memo-today-label" class="memo-today-label"></span></h3>
+          <div class="chulgo-spacer"></div>
+          <button id="memo-widget-open" class="nav-btn" title="할 일을 별도 창으로 띄우기">⧉</button>
+        </div>
+        <div class="memo-list-wrap" id="memo-list-wrap"></div>
+        <div class="chulgo-empty" id="memo-empty">등록된 메모가 없습니다.</div>
+        <div class="memo-alarm-row">
+          <label class="memo-alarm-toggle">
+            <input type="checkbox" id="memo-alarm-enable" />
+            <span>⏰ 시간 설정하기</span>
+          </label>
+          <input type="time" id="memo-alarm-time" class="hidden" />
+        </div>
+        <div class="notice-input">
+          <input id="memo-text" type="text" placeholder="메모를 입력하세요..." maxlength="500" />
+          <button id="memo-send">보내기</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="ai-panel" class="view-panel hidden" data-view-pane="ai">
+      <div class="glass-card ai-card">
+        <div class="ai-chat-panel-header">
+          <h3>✨ AI 어시스턴트</h3>
+          <button id="ai-chat-reset" class="nav-btn" title="대화 초기화">↺</button>
+        </div>
+        <div class="ai-chat-messages" id="ai-chat-messages">
+          <div class="ai-chat-empty">뭐든 편하게 물어보세요. "내일 3시 미팅 캘린더에 추가해줘"처럼 말하면 실제로 추가도 해드려요.</div>
+        </div>
+        <div class="ai-chat-input-row">
+          <textarea id="ai-chat-input" rows="2" placeholder="메시지를 입력하세요..."></textarea>
+          <button id="ai-chat-send">보내기</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="chulgo-panel" class="view-panel hidden" data-view-pane="chulgo">
+      <div class="glass-card chulgo-card">
+        <div class="chulgo-header">
+          <h3 class="text-page-title"><span class="chulgo-icon-badge">📋</span> 출고 관리 장부</h3>
+          <div class="chulgo-spacer"></div>
+          <button id="chulgo-refresh" class="nav-btn chulgo-refresh-btn" title="데이터가 안 보이면 눌러서 새로고침">⟳</button>
+        </div>
+
+        <div class="chulgo-stat-row" id="chulgo-stat-row"></div>
+
+        <!-- 주요 액션: 월 이동 + 건 추가(Primary) + 자주 쓰는 보조 액션(Secondary) -->
+        <div class="chulgo-toolbar chulgo-toolbar-primary">
+          <div class="month-nav">
+            <button class="nav-btn" id="chulgo-prev-month">&lsaquo;</button>
+            <input type="month" id="chulgo-month-picker" />
+            <button class="nav-btn" id="chulgo-next-month">&rsaquo;</button>
+          </div>
+          <button id="chulgo-add-row" class="btn btn-primary btn-lg chulgo-primary-btn">+ 출고 건 추가</button>
+          <div class="chulgo-spacer"></div>
+          <button id="chulgo-ai-fill-btn" class="btn btn-secondary chulgo-mini-btn">✨ AI로 채우기</button>
+          <button id="chulgo-carry-over" class="btn btn-secondary chulgo-mini-btn" disabled>이월하기</button>
+        </div>
+
+        <!-- 보조 액션: 엑셀 출력(Tertiary) -->
+        <div class="chulgo-toolbar chulgo-toolbar-secondary">
+          <span class="chulgo-group-label text-caption">엑셀 출력</span>
+          <button id="chulgo-excel-preview-btn" class="btn btn-secondary chulgo-mini-btn chulgo-excel-btn" title="투입일 · 차량가격 · CM/AG · 대리점 · 비고 등 회사 제출용 양식">📄 출고현황 엑셀</button>
+          <button id="chulgo-settlement-btn" class="btn btn-secondary chulgo-mini-btn chulgo-excel-btn" title="리텐션 · 추가수수료 · 프로모션까지 반영한 내 급여 확인용 정산서">🧾 정산서 엑셀</button>
+        </div>
+
+        <!-- 설정/메타데이터: 문구·엑셀 생성 시 들어가는 내 정보(액션 버튼과 성격이 달라 분리) -->
+        <div class="chulgo-meta-row">
+          <span class="chulgo-group-label text-caption">문서에 들어갈 내 정보</span>
+          <div class="chulgo-position-field">
+            <label for="chulgo-position-select">직책</label>
+            <select id="chulgo-position-select">
+              <option value="주임">주임</option>
+              <option value="대리">대리</option>
+              <option value="과장">과장</option>
+              <option value="차장">차장</option>
+              <option value="팀장">팀장</option>
+            </select>
+          </div>
+          <div class="chulgo-position-field">
+            <label for="chulgo-phone-input">연락처</label>
+            <input type="text" id="chulgo-phone-input" placeholder="010-0000-0000" />
+          </div>
+        </div>
+
+        <div class="chulgo-month-title-row">
+          <h4 id="chulgo-active-month-label" class="text-card-title"></h4>
+          <span class="chulgo-month-count text-caption" id="chulgo-active-month-count"></span>
+          <div class="chulgo-spacer"></div>
+          <span class="chulgo-month-total-label text-caption" title="표에 보이는 이 달 수수료를 그대로 더한 값 — 사무실비 공제, 직책수당은 반영 전(참고용)">수수료 소계 (공제 전)</span>
+          <span class="chulgo-month-total chulgo-blurrable" id="chulgo-active-month-total" title="클릭해서 가리기/보이기"></span>
+        </div>
+
+        <!-- 문구 생성: 행을 선택해야 활성화되는 도구 모음(Ghost, 가장 낮은 시각 강조) -->
+        <div class="chulgo-action-row" id="chulgo-action-row">
+          <span class="chulgo-action-hint text-caption" id="chulgo-action-hint">행을 클릭해서 선택하세요</span>
+          <button type="button" id="chulgo-gen-report" class="btn btn-ghost btn-sm chulgo-mini-btn" disabled>계약보고</button>
+          <button type="button" id="chulgo-gen-deploy" class="btn btn-ghost btn-sm chulgo-mini-btn" disabled>투입보고</button>
+          <button type="button" id="chulgo-gen-guide" class="btn btn-ghost btn-sm chulgo-mini-btn" disabled>계약내용 안내문자</button>
+          <button type="button" id="chulgo-gen-connected" class="btn btn-ghost btn-sm chulgo-mini-btn" disabled>커넥티드 안내문자</button>
+          <button type="button" id="chulgo-gen-settlement" class="btn btn-ghost btn-sm chulgo-mini-btn" disabled>정리문구</button>
+          <button type="button" id="chulgo-gen-fee-report" class="btn btn-ghost btn-sm chulgo-mini-btn" disabled>수수료보고</button>
+        </div>
+        <p class="chulgo-formula-hint text-caption" id="chulgo-formula-hint"></p>
+
+        <div class="chulgo-table-wrap" id="chulgo-table-wrap"></div>
+        <div class="chulgo-empty" id="chulgo-empty">이 달에는 아직 입력된 출고 건이 없습니다. "+ 출고 건 추가"로 시작하세요.</div>
+      </div>
+    </div>
+
+    <div id="compare-panel" class="view-panel hidden" data-view-pane="compare">
+      <div class="glass-card compare-card">
+        <div class="chulgo-header">
+          <h3><span class="chulgo-icon-badge">📊</span> 금융사 비교시트</h3>
+          <div class="chulgo-spacer"></div>
+          <button id="compare-settings-btn" class="nav-btn chulgo-refresh-btn" title="금융사 목록 설정 (추가/삭제/이름변경)">⚙</button>
+        </div>
+        <div class="compare-sheets-row">
+          <div class="compare-sheet" id="compare-sheet-0"></div>
+          <div class="compare-sheet" id="compare-sheet-1"></div>
+        </div>
+      </div>
+    </div>
     </div>
   </div>
 
@@ -107,11 +263,10 @@
       <div class="theme-row style-row">
         <span>테마 모드</span>
       </div>
-      <div class="style-options">
-        <label><input type="radio" name="theme-mode" value="dark" checked /> 다크테마</label>
-        <label><input type="radio" name="theme-mode" value="light" /> 라이트테마</label>
-        <label><input type="radio" name="theme-mode" value="custom" /> 사용자 설정</label>
-      </div>
+      <!-- 프리셋마다 배경/서피스/강조/글씨 색을 작은 스와치로 미리 보여준다 — 실제
+           내용은 renderer.js가 theme.js의 THEME_PRESET_META/THEME_PRESETS에서 채운다
+           (프리셋을 늘려도 여기 마크업을 손댈 필요가 없게). -->
+      <div id="theme-preset-grid" class="theme-preset-grid"></div>
 
       <div class="theme-row style-row">
         <span>카드 스타일</span>
@@ -220,13 +375,18 @@
       <div class="theme-row">
         <span>글씨체</span>
         <select id="theme-font">
-          <option value="">기본</option>
+          <option value="">기본 (Pretendard)</option>
+          <option value="'Noto Sans KR', 'Pretendard Variable', 'Malgun Gothic', sans-serif">Noto Sans KR</option>
+          <option value="'IBM Plex Sans KR', 'Pretendard Variable', 'Malgun Gothic', sans-serif">IBM Plex Sans KR</option>
           <option value="'맑은 고딕', sans-serif">맑은 고딕</option>
           <option value="'굴림', sans-serif">굴림</option>
           <option value="'돋움', sans-serif">돋움</option>
           <option value="'바탕', serif">바탕</option>
           <option value="'Consolas', monospace">Consolas</option>
         </select>
+      </div>
+      <div class="theme-row theme-font-preview-row">
+        <span id="theme-font-preview">가나다라마바사 ABC 123,456원</span>
       </div>
       <div class="theme-row">
         <span>날짜 숫자 크기</span>
@@ -271,63 +431,6 @@
     </div>
   </div>
 
-  <div id="chulgo-panel" class="settings-overlay hidden">
-    <div class="glass-card chulgo-card">
-      <div class="chulgo-header">
-        <h3>📋 출고 관리 장부</h3>
-        <div class="chulgo-spacer"></div>
-        <button id="chulgo-refresh" class="nav-btn" title="데이터가 안 보이면 눌러서 새로고침">⟳</button>
-        <button id="chulgo-close" class="nav-btn">✕</button>
-      </div>
-
-      <div class="chulgo-stat-row" id="chulgo-stat-row"></div>
-
-      <div class="chulgo-toolbar">
-        <div class="month-nav">
-          <button class="nav-btn" id="chulgo-prev-month">&lsaquo;</button>
-          <input type="month" id="chulgo-month-picker" />
-          <button class="nav-btn" id="chulgo-next-month">&rsaquo;</button>
-        </div>
-        <button id="chulgo-add-row" class="chulgo-primary-btn">+ 출고 건 추가</button>
-        <button id="chulgo-carry-over" class="chulgo-mini-btn" disabled>이월하기</button>
-        <button id="chulgo-excel-preview-btn" class="chulgo-mini-btn">출고현황 미리보기</button>
-        <div class="chulgo-spacer"></div>
-        <div class="chulgo-position-field">
-          <label for="chulgo-position-select">직책</label>
-          <select id="chulgo-position-select">
-            <option value="주임">주임</option>
-            <option value="대리">대리</option>
-            <option value="과장">과장</option>
-            <option value="차장">차장</option>
-            <option value="팀장">팀장</option>
-          </select>
-        </div>
-        <div class="chulgo-position-field">
-          <label for="chulgo-phone-input">연락처</label>
-          <input type="text" id="chulgo-phone-input" placeholder="010-0000-0000" />
-        </div>
-      </div>
-
-      <div class="chulgo-month-title-row">
-        <h4 id="chulgo-active-month-label"></h4>
-        <span class="chulgo-month-count" id="chulgo-active-month-count"></span>
-        <div class="chulgo-action-row" id="chulgo-action-row">
-          <span class="chulgo-action-hint" id="chulgo-action-hint">행을 클릭해서 선택하세요</span>
-          <button type="button" id="chulgo-gen-report" class="chulgo-mini-btn" disabled>계약보고</button>
-          <button type="button" id="chulgo-gen-deploy" class="chulgo-mini-btn" disabled>투입보고</button>
-          <button type="button" id="chulgo-gen-guide" class="chulgo-mini-btn" disabled>계약내용 안내문자</button>
-          <button type="button" id="chulgo-gen-connected" class="chulgo-mini-btn" disabled>커넥티드 안내문자</button>
-          <button type="button" id="chulgo-gen-settlement" class="chulgo-mini-btn" disabled>정리문구</button>
-        </div>
-        <span class="chulgo-month-total" id="chulgo-active-month-total"></span>
-      </div>
-      <p class="chulgo-formula-hint" id="chulgo-formula-hint"></p>
-
-      <div class="chulgo-table-wrap" id="chulgo-table-wrap"></div>
-      <div class="chulgo-empty" id="chulgo-empty">이 달에는 아직 입력된 출고 건이 없습니다. "+ 출고 건 추가"로 시작하세요.</div>
-    </div>
-  </div>
-
   <div id="chulgo-memo-popup" class="chulgo-mini-overlay hidden">
     <div class="chulgo-mini-card">
       <h4>메모 (계약기간 / 주행거리 / 초기자금)</h4>
@@ -336,6 +439,150 @@
       <div class="chulgo-mini-actions">
         <button type="button" id="chulgo-memo-save">저장</button>
         <button type="button" id="chulgo-memo-cancel">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="chulgo-settlement-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card chulgo-settlement-card">
+      <h4>정산서 만들기 — <span id="chulgo-settlement-title"></span></h4>
+
+      <div class="chulgo-settlement-top">
+        <div class="chulgo-settle-section">
+          <div class="chulgo-settle-head"><strong>리텐션</strong></div>
+          <div class="chulgo-settle-row">
+            <label class="chulgo-settlement-label">지난달까지 누적 횟수</label>
+            <input type="number" id="chulgo-retention-start" min="0" max="999" class="cs-amount">
+            <span class="chulgo-mini-hint" id="chulgo-retention-count"></span>
+          </div>
+          <div class="chulgo-settlement-choice">
+            <label><input type="radio" name="retention-mode" value="continue" checked>
+              100회 넘어가도 계속 이어가기 <span class="chulgo-mini-hint">(101회~ 차감 -60,000 / 201회~ -70,000)</span></label>
+            <label><input type="radio" name="retention-mode" value="reset">
+              100회 채우면 정산받고 1회부터 다시 <span class="chulgo-mini-hint">(33행에 천만원 자동 기입)</span></label>
+          </div>
+          <div class="chulgo-settle-row" style="margin-top:8px">
+            <label class="chulgo-settlement-label">미정산 &amp; 미지급 (다음 달 장부 총 대수)</label>
+            <input type="number" id="chulgo-unsettled-count" min="0" max="99" class="cs-amount">
+            <span class="chulgo-mini-hint">M35</span>
+          </div>
+          <div id="chulgo-retention-preview" class="chulgo-mini-hint"></div>
+        </div>
+
+        <div id="chulgo-settlement-summary" class="chulgo-settle-preview"></div>
+      </div>
+
+      <div class="chulgo-settle-section">
+        <div class="chulgo-settle-head">
+          <strong>정산서 미리보기</strong>
+          <span class="chulgo-mini-hint">엑셀에 실제로 들어갈 값입니다. 수식 열(회색)은 엑셀이 자동 계산합니다.</span>
+        </div>
+        <div id="chulgo-settlement-preview" class="chulgo-settlement-preview-wrap"></div>
+      </div>
+
+      <div class="chulgo-mini-actions">
+        <button type="button" id="chulgo-settlement-export">엑셀로 저장</button>
+        <button type="button" id="chulgo-settlement-cancel">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="chulgo-settle-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card chulgo-settle-card">
+      <h4>정산 상세 — <span id="chulgo-settle-who"></span></h4>
+      <p class="chulgo-mini-hint">
+        여기 적은 항목이 정산서 수식(<code>=123540+440000+40000</code>)과 메모란
+        (<code>쿠팡(-123,540) / 대리점수당(2,501,204)</code>)으로 그대로 들어갑니다.
+      </p>
+
+      <div class="chulgo-settle-section">
+        <div class="chulgo-settle-head"><strong>차량가격 / 수수료율</strong>
+          <span class="chulgo-mini-hint">출고현황 엑셀과 같은 값을 씁니다 — 여기서 넣으면 거기도 같이 채워집니다</span>
+        </div>
+        <div class="chulgo-settle-row chulgo-settle-plain-row">
+          <label class="chulgo-settlement-label" style="flex:0 0 90px">차량가격</label>
+          <input type="text" id="chulgo-settle-vehicle-price" class="cs-amount" inputmode="numeric" placeholder="0">
+          <label class="chulgo-settlement-label" style="flex:0 0 90px;margin-left:16px">수수료율(%)</label>
+          <input type="text" id="chulgo-settle-fee-rate" class="cs-amount" inputmode="decimal" placeholder="비우면 자동계산">
+        </div>
+      </div>
+
+      <div class="chulgo-settle-section">
+        <div class="chulgo-settle-head">
+          <strong>추가수수료</strong>
+          <span class="chulgo-mini-hint">금융사가 매달 다르게 주는 추가 프로모션 — "금액"은 H열에 더해지고, "%"는 계산 없이 메모란에 표기만 됩니다</span>
+          <div class="chulgo-spacer"></div>
+          <button type="button" id="chulgo-settle-add-extrafee" class="chulgo-mini-btn">+ 항목 추가</button>
+        </div>
+        <div id="chulgo-settle-extrafees" class="chulgo-settle-list"></div>
+      </div>
+
+      <div class="chulgo-settle-section">
+        <div class="chulgo-settle-head">
+          <strong>프로모션</strong> <span class="chulgo-mini-hint">정산서 H열 — 여러 건이면(예: 프로모션1 50만원 + 프로모션2 차량가 1.2%는 직접 계산해서 금액으로) 항목을 나눠 적으세요</span>
+          <div class="chulgo-spacer"></div>
+          <button type="button" id="chulgo-settle-add-promo" class="chulgo-mini-btn">+ 항목 추가</button>
+        </div>
+        <div id="chulgo-settle-promo" class="chulgo-settle-list"></div>
+      </div>
+
+      <div class="chulgo-settle-section">
+        <div class="chulgo-settle-head">
+          <strong>대리점수당</strong> <span class="chulgo-mini-hint">정산서 H열</span>
+          <div class="chulgo-spacer"></div>
+          <button type="button" id="chulgo-settle-add-agencyfee" class="chulgo-mini-btn">+ 항목 추가</button>
+        </div>
+        <div id="chulgo-settle-agencyfee" class="chulgo-settle-list"></div>
+      </div>
+
+      <div class="chulgo-settle-section">
+        <div class="chulgo-settle-head">
+          <strong>비용 항목</strong> <span class="chulgo-mini-hint">정산서 J열 (빼는 금액)</span>
+          <div class="chulgo-spacer"></div>
+          <button type="button" id="chulgo-settle-add-expense" class="chulgo-mini-btn">+ 항목 추가</button>
+        </div>
+        <div id="chulgo-settle-expenses" class="chulgo-settle-list"></div>
+      </div>
+
+      <div class="chulgo-settle-section">
+        <div class="chulgo-settle-head">
+          <strong>페이백</strong> <span class="chulgo-mini-hint">정산서 M열</span>
+          <div class="chulgo-spacer"></div>
+          <button type="button" id="chulgo-settle-add-payback" class="chulgo-mini-btn">+ 항목 추가</button>
+        </div>
+        <div id="chulgo-settle-paybacks" class="chulgo-settle-list"></div>
+      </div>
+
+      <div class="chulgo-settle-section">
+        <div class="chulgo-settle-head"><strong>메모란에 덧붙일 자유 문구</strong></div>
+        <input type="text" id="chulgo-settle-memo" placeholder="예: 대리점수당(4월로이월)  /  현금영수증(500,000원)">
+      </div>
+
+      <div id="chulgo-settle-preview" class="chulgo-settle-preview"></div>
+
+      <div class="chulgo-mini-actions">
+        <button type="button" id="chulgo-settle-save">저장</button>
+        <button type="button" id="chulgo-settle-cancel">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="chulgo-ai-fill-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card">
+      <h4>✨ AI로 채우기</h4>
+      <p class="chulgo-mini-hint">
+        어느 건인지 알아볼 수 있게 고객명/차종/금융사 중 하나는 적어주세요. 예:
+        "삼아항업 용품작업으로 85만원 나갔고 페이백으로 25만원 나감(4% 할증). 대리점수당 1,825,425원, 추가수수료 1%, 실 수수료 2,452,156원. 기존거 빼고 수정해줘"
+      </p>
+      <textarea id="chulgo-ai-fill-text" rows="6" placeholder="자연어로 편하게 적어주세요"></textarea>
+      <div class="chulgo-mini-actions">
+        <button type="button" id="chulgo-ai-fill-analyze">분석하기</button>
+        <span id="chulgo-ai-fill-status" class="chulgo-mini-hint"></span>
+      </div>
+      <div id="chulgo-ai-fill-preview"></div>
+      <div class="chulgo-mini-actions">
+        <button type="button" id="chulgo-ai-fill-apply" disabled>적용</button>
+        <button type="button" id="chulgo-ai-fill-cancel">취소</button>
       </div>
     </div>
   </div>
@@ -382,6 +629,17 @@
     </div>
   </div>
 
+  <div id="whats-new-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card whats-new-card">
+      <h4>🎉 업데이트 내용 <span id="whats-new-version"></span></h4>
+      <ul class="whats-new-list" id="whats-new-list"></ul>
+      <div class="chulgo-mini-actions">
+        <div class="chulgo-spacer"></div>
+        <button type="button" id="whats-new-close">확인</button>
+      </div>
+    </div>
+  </div>
+
   <div id="memo-alarm-popup" class="chulgo-mini-overlay hidden">
     <div class="chulgo-mini-card">
       <h4>⏰ 메모 알림</h4>
@@ -393,6 +651,22 @@
     </div>
   </div>
 
+  <div id="compare-settings-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card compare-settings-card">
+      <h4>⚙ 금융사 목록 설정</h4>
+      <div class="compare-settings-list" id="compare-settings-list"></div>
+      <div class="compare-settings-add-row">
+        <input type="text" id="compare-settings-add-input" placeholder="새 금융사 이름 추가" maxlength="20">
+        <button type="button" id="compare-settings-add-btn">+ 추가</button>
+      </div>
+      <div class="chulgo-mini-actions">
+        <div class="chulgo-spacer"></div>
+        <button type="button" id="compare-settings-close">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="theme.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
