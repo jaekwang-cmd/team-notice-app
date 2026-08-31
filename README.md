@@ -38,6 +38,11 @@ service cloud.firestore {
       allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid;
     }
+    // 고객 리마인더: 본인이 쓴 문서만 읽기/쓰기 가능 (다른 팀원 데이터는 안 보임)
+    match /customerReminders/{docId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid;
+    }
   }
 }
 ```
