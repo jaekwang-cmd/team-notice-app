@@ -269,6 +269,51 @@ async function deleteChulgoEntry(db, id) {
   await deleteDoc(doc(db, 'chulgoEntries', id));
 }
 
+// --- 고객 리마인더 (몇 달 뒤 다시 연락하기로 한 고객) — 장부와 같은 개인 전용 패턴 ---
+
+function subscribeToReminders(db, uid, onUpdate, onError) {
+  const q = query(collection(db, 'customerReminders'), where('authorUid', '==', uid));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const items = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          name: data.name || '',
+          phone: data.phone || '',
+          car: data.car || '',
+          remindDate: data.remindDate || '',
+          note: data.note || '',
+          done: !!data.done,
+          notified: !!data.notified,
+        };
+      });
+      onUpdate(items);
+    },
+    onError
+  );
+}
+
+async function createReminder(db, { authorUid, ...data }) {
+  const ref = await addDoc(collection(db, 'customerReminders'), {
+    ...data,
+    authorUid,
+    notified: false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+async function updateReminder(db, id, data) {
+  await updateDoc(doc(db, 'customerReminders', id), { ...data, updatedAt: serverTimestamp() });
+}
+
+async function deleteReminder(db, id) {
+  await deleteDoc(doc(db, 'customerReminders', id));
+}
+
 module.exports = {
   initFirebase,
   signInWithGoogleIdToken,
@@ -287,4 +332,8 @@ module.exports = {
   createChulgoEntry,
   updateChulgoEntry,
   deleteChulgoEntry,
+  subscribeToReminders,
+  createReminder,
+  updateReminder,
+  deleteReminder,
 };

@@ -3892,6 +3892,229 @@ window.api.onChulgoUpdate((entries) => {
   }
 });
 
+// ─── 고객 리마인더 (몇 달 뒤 다시 연락하기로 한 고객) ─────────────────────────
+// 메모장의 "날짜별 섹션 + 완료는 접어서 숨김" 패턴을 그대로 따르되, 리마인더는
+// 몇 달 뒤가 흔해서 버킷을 오늘/내일/이번 주 대신 이번 달/다음 달/그 이후로 나눈다.
+const reminderPanel = document.getElementById('reminder-panel');
+const reminderListWrap = document.getElementById('reminder-list-wrap');
+const reminderEmpty = document.getElementById('reminder-empty');
+const reminderCountLabel = document.getElementById('reminder-count-label');
+const reminderPopup = document.getElementById('reminder-popup');
+const reminderPopupTitle = document.getElementById('reminder-popup-title');
+const reminderNameInput = document.getElementById('reminder-name');
+const reminderPhoneInput = document.getElementById('reminder-phone');
+const reminderCarInput = document.getElementById('reminder-car');
+const reminderDateInput = document.getElementById('reminder-date');
+const reminderNoteInput = document.getElementById('reminder-note');
+const reminderStatusEl = document.getElementById('reminder-status');
+const REMINDER_WINDOW_SIZE_KEY = 'reminder_window_size_v1';
+const REMINDER_DEFAULT_WINDOW_SIZE = { width: 900, height: 760 };
+
+let reminders = [];
+let reminderEditingId = null;
+const REMINDER_DONE_EXPANDED_KEY = 'reminder_done_expanded_v1';
+let reminderDoneExpanded = localStorage.getItem(REMINDER_DONE_EXPANDED_KEY) === '1';
+
+function reminderSortedAll() {
+  return [...reminders].sort((a, b) => (a.remindDate || '').localeCompare(b.remindDate || ''));
+}
+
+function reminderDateLabel(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return `${y}.${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}(${MEMO_WEEKDAY[date.getDay()]})`;
+}
+
+function reminderBucketOf(iso) {
+  if (!iso) return 'later';
+  const today = new Date();
+  const [y, m, d] = iso.split('-').map(Number);
+  const target = new Date(y, m - 1, d);
+  target.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  if (target < today) return 'overdue';
+  if (target.getFullYear() === today.getFullYear() && target.getMonth() === today.getMonth()) return 'thisMonth';
+  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  if (target.getFullYear() === nextMonth.getFullYear() && target.getMonth() === nextMonth.getMonth()) return 'nextMonth';
+  return 'later';
+}
+
+const REMINDER_BUCKETS = [
+  { key: 'overdue', label: '⚠ 기한 지남' },
+  { key: 'thisMonth', label: '이번 달' },
+  { key: 'nextMonth', label: '다음 달' },
+  { key: 'later', label: '그 이후' },
+];
+
+function reminderBuildRow(r) {
+  const row = document.createElement('div');
+  row.className = 'reminder-row' + (r.done ? ' done' : '');
+  row.dataset.id = r.id;
+
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.className = 'reminder-row-check';
+  check.checked = !!r.done;
+  check.title = r.done ? '완료 취소' : '완료 표시';
+  check.onchange = () => {
+    const nextDone = check.checked;
+    window.api.updateReminder({ id: r.id, done: nextDone }).catch((err) => {
+      console.error('리마인더 완료 처리 실패:', err);
+      showToast(chulgoFriendlyError(err));
+      check.checked = !nextDone;
+    });
+  };
+  row.appendChild(check);
+
+  const body = document.createElement('div');
+  body.className = 'reminder-row-body';
+  body.title = '클릭해서 수정';
+  body.onclick = () => reminderOpenPopup(r);
+
+  const line1 = document.createElement('div');
+  line1.className = 'reminder-row-line1';
+  line1.innerHTML = `<strong>${escapeHtml(r.name || '(이름 없음)')}</strong>${r.car ? ` <span class="reminder-row-car">${escapeHtml(r.car)}</span>` : ''}`;
+  body.appendChild(line1);
+
+  const line2 = document.createElement('div');
+  line2.className = 'reminder-row-line2';
+  const parts = [reminderDateLabel(r.remindDate)];
+  if (r.phone) parts.push(r.phone);
+  if (r.note) parts.push(r.note);
+  line2.textContent = parts.filter(Boolean).join(' · ');
+  body.appendChild(line2);
+
+  row.appendChild(body);
+
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.className = 'memo-row-delete';
+  delBtn.textContent = '×';
+  delBtn.title = '삭제';
+  delBtn.onclick = async (ev) => {
+    ev.stopPropagation();
+    if (!confirm(`"${r.name || '이 리마인더'}"를 삭제할까요?`)) return;
+    try {
+      await window.api.deleteReminder(r.id);
+    } catch (err) {
+      console.error('리마인더 삭제 실패:', err);
+      showToast('삭제에 실패했습니다.');
+    }
+  };
+  row.appendChild(delBtn);
+
+  return row;
+}
+
+function reminderBuildSection(label, items, extraClass) {
+  const section = document.createElement('div');
+  section.className = 'memo-section' + (extraClass ? ` ${extraClass}` : '');
+  const header = document.createElement('div');
+  header.className = 'memo-section-header';
+  header.textContent = `${label} · ${items.length}`;
+  section.appendChild(header);
+  items.forEach((r) => section.appendChild(reminderBuildRow(r)));
+  return section;
+}
+
+function renderReminders() {
+  const sorted = reminderSortedAll();
+  reminderCountLabel.textContent = sorted.length ? `전체 ${sorted.length}건` : '';
+  reminderEmpty.style.display = sorted.length ? 'none' : 'block';
+
+  const active = sorted.filter((r) => !r.done);
+  const done = sorted.filter((r) => r.done);
+
+  reminderListWrap.innerHTML = '';
+
+  REMINDER_BUCKETS.forEach(({ key, label }) => {
+    const items = active.filter((r) => reminderBucketOf(r.remindDate) === key);
+    if (items.length) reminderListWrap.appendChild(reminderBuildSection(label, items, key === 'overdue' ? 'memo-section-overdue' : ''));
+  });
+
+  if (done.length) {
+    const doneSection = document.createElement('div');
+    doneSection.className = 'memo-section memo-done-section';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'memo-done-toggle';
+    toggle.innerHTML = `<span class="memo-done-chevron">${reminderDoneExpanded ? '▾' : '▸'}</span> 완료됨 · ${done.length}`;
+    toggle.onclick = () => {
+      reminderDoneExpanded = !reminderDoneExpanded;
+      localStorage.setItem(REMINDER_DONE_EXPANDED_KEY, reminderDoneExpanded ? '1' : '0');
+      renderReminders();
+    };
+    doneSection.appendChild(toggle);
+    if (reminderDoneExpanded) done.forEach((r) => doneSection.appendChild(reminderBuildRow(r)));
+    reminderListWrap.appendChild(doneSection);
+  }
+}
+
+function reminderOpenPopup(r) {
+  reminderEditingId = r ? r.id : null;
+  reminderPopupTitle.textContent = r ? '리마인더 수정' : '리마인더 추가';
+  reminderNameInput.value = r ? r.name : '';
+  reminderPhoneInput.value = r ? r.phone : '';
+  reminderCarInput.value = r ? r.car : '';
+  reminderDateInput.value = r ? r.remindDate : '';
+  reminderNoteInput.value = r ? r.note : '';
+  reminderStatusEl.textContent = '';
+  reminderPopup.classList.remove('hidden');
+  reminderNameInput.focus();
+}
+
+function reminderClosePopup() {
+  reminderPopup.classList.add('hidden');
+  reminderEditingId = null;
+}
+
+document.getElementById('reminder-add-open').addEventListener('click', () => reminderOpenPopup(null));
+document.getElementById('reminder-cancel').addEventListener('click', reminderClosePopup);
+
+document.getElementById('reminder-save').addEventListener('click', async () => {
+  const name = reminderNameInput.value.trim();
+  const remindDate = reminderDateInput.value;
+  if (!name) { reminderStatusEl.textContent = '고객명을 입력해주세요.'; return; }
+  if (!remindDate) { reminderStatusEl.textContent = '연락 예정일을 선택해주세요.'; return; }
+
+  const data = {
+    name,
+    phone: reminderPhoneInput.value.trim(),
+    car: reminderCarInput.value.trim(),
+    remindDate,
+    note: reminderNoteInput.value.trim(),
+  };
+
+  const saveBtn = document.getElementById('reminder-save');
+  saveBtn.disabled = true;
+  reminderStatusEl.textContent = '저장 중...';
+  try {
+    if (reminderEditingId) {
+      // 날짜를 바꿔서 미래로 다시 미루는 경우가 흔해서, 수정 시 알림 표식을 초기화해
+      // 새 날짜에 다시 알려주게 한다.
+      await window.api.updateReminder({ id: reminderEditingId, ...data, notified: false });
+    } else {
+      await window.api.createReminder(data);
+    }
+    reminderClosePopup();
+  } catch (err) {
+    console.error('리마인더 저장 실패:', err);
+    reminderStatusEl.textContent = chulgoFriendlyError(err);
+  } finally {
+    saveBtn.disabled = false;
+  }
+});
+
+window.api.onReminderUpdate((items) => {
+  reminders = items;
+  renderReminders();
+});
+
+window.api.onReminderAlarm((r) => {
+  showToast(`📇 ${r.name}${r.car ? ` (${r.car})` : ''} 연락할 때예요${r.note ? ' — ' + r.note : ''}`);
+});
+
 // ─── 금융사 비교시트 ──────────────────────────────────────────────────────
 // 캘린더 자리를 갈아치우는 "탭 전환" 방식은 장부와 동일 패턴을 그대로 따른다.
 // 데이터는 팀 공유가 필요 없는 개인 작업용 계산기라 Firestore 없이 localStorage에만 저장한다.
@@ -4236,12 +4459,13 @@ const AI_DEFAULT_WINDOW_SIZE = { width: 900, height: 760 };
 
 const memoPanel = document.getElementById('memo-panel');
 const aiPanel = document.getElementById('ai-panel');
-const VIEW_PANES = { calendar: appContentEl, memo: memoPanel, ai: aiPanel, chulgo: chulgoPanel, compare: comparePanel };
+const VIEW_PANES = { calendar: appContentEl, memo: memoPanel, ai: aiPanel, chulgo: chulgoPanel, reminder: reminderPanel, compare: comparePanel };
 const VIEW_WINDOW_SIZE = {
   calendar: { key: CALENDAR_WINDOW_SIZE_KEY, default: null },
   memo: { key: MEMO_WINDOW_SIZE_KEY, default: MEMO_DEFAULT_WINDOW_SIZE },
   ai: { key: AI_WINDOW_SIZE_KEY, default: AI_DEFAULT_WINDOW_SIZE },
   chulgo: { key: CHULGO_WINDOW_SIZE_KEY, default: CHULGO_DEFAULT_WINDOW_SIZE },
+  reminder: { key: REMINDER_WINDOW_SIZE_KEY, default: REMINDER_DEFAULT_WINDOW_SIZE },
   compare: { key: COMPARE_WINDOW_SIZE_KEY, default: COMPARE_DEFAULT_WINDOW_SIZE },
 };
 let currentView = 'calendar';

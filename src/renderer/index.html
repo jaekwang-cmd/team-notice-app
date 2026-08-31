@@ -38,6 +38,9 @@
       <button class="sidebar-nav-btn" data-view="chulgo" title="정산장부">
         <span class="sidebar-nav-icon">📋</span><span class="sidebar-nav-label">정산장부</span>
       </button>
+      <button class="sidebar-nav-btn" data-view="reminder" title="고객 리마인더">
+        <span class="sidebar-nav-icon">📇</span><span class="sidebar-nav-label">고객 리마인더</span>
+      </button>
       <button class="sidebar-nav-btn" data-view="compare" title="비교시트">
         <span class="sidebar-nav-icon">📊</span><span class="sidebar-nav-label">비교시트</span>
       </button>
@@ -231,6 +234,20 @@
 
         <div class="chulgo-table-wrap" id="chulgo-table-wrap"></div>
         <div class="chulgo-empty" id="chulgo-empty">이 달에는 아직 입력된 출고 건이 없습니다. "+ 출고 건 추가"로 시작하세요.</div>
+      </div>
+    </div>
+
+    <div id="reminder-panel" class="view-panel hidden" data-view-pane="reminder">
+      <div class="glass-card reminder-card">
+        <div class="chulgo-header">
+          <h3><span class="chulgo-icon-badge">📇</span> 고객 리마인더</h3>
+          <span id="reminder-count-label" class="chulgo-month-count"></span>
+          <div class="chulgo-spacer"></div>
+          <button id="reminder-add-open" class="btn btn-primary btn-lg chulgo-primary-btn">+ 리마인더 추가</button>
+        </div>
+        <p class="chulgo-mini-hint">몇 달 뒤 다시 연락하기로 한 고객을 등록해두면, 지정한 날짜 오전 9시에 알려드려요.</p>
+        <div class="reminder-list-wrap" id="reminder-list-wrap"></div>
+        <div class="chulgo-empty" id="reminder-empty">등록된 리마인더가 없습니다. "+ 리마인더 추가"로 시작하세요.</div>
       </div>
     </div>
 
@@ -454,6 +471,39 @@
         <button type="button" id="account-delete-confirm-btn" class="btn btn-danger" disabled>계정 삭제</button>
         <button type="button" id="account-delete-cancel-btn">취소</button>
         <span id="account-delete-status" class="chulgo-mini-hint"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="reminder-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card">
+      <h4 id="reminder-popup-title">리마인더 추가</h4>
+      <div class="reminder-form-grid">
+        <label class="reminder-form-field">
+          <span>고객명</span>
+          <input type="text" id="reminder-name" placeholder="김땡땡" maxlength="60">
+        </label>
+        <label class="reminder-form-field">
+          <span>연락처</span>
+          <input type="text" id="reminder-phone" placeholder="010-0000-0000" maxlength="30">
+        </label>
+        <label class="reminder-form-field">
+          <span>차종</span>
+          <input type="text" id="reminder-car" placeholder="NX300" maxlength="60">
+        </label>
+        <label class="reminder-form-field">
+          <span>연락 예정일</span>
+          <input type="date" id="reminder-date">
+        </label>
+      </div>
+      <label class="reminder-form-field reminder-form-note">
+        <span>메모</span>
+        <input type="text" id="reminder-note" placeholder="예: 12월 연락하기 · 계약 만료 예정" maxlength="200">
+      </label>
+      <div class="chulgo-mini-actions">
+        <button type="button" id="reminder-save">저장</button>
+        <button type="button" id="reminder-cancel">취소</button>
+        <span id="reminder-status" class="chulgo-mini-hint"></span>
       </div>
     </div>
   </div>

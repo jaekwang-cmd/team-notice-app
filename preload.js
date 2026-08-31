@@ -68,6 +68,15 @@ contextBridge.exposeInMainWorld('api', {
   onChulgoUpdate: (callback) => {
     ipcRenderer.on('chulgo:update', (_event, entries) => callback(entries));
   },
+  createReminder: (payload) => ipcRenderer.invoke('reminders:create', payload),
+  updateReminder: (payload) => ipcRenderer.invoke('reminders:update', payload),
+  deleteReminder: (id) => ipcRenderer.invoke('reminders:delete', id),
+  onReminderUpdate: (callback) => {
+    ipcRenderer.on('reminders:update', (_event, items) => callback(items));
+  },
+  onReminderAlarm: (callback) => {
+    ipcRenderer.on('reminders:alarm', (_event, reminder) => callback(reminder));
+  },
   aiFillChulgo: (payload) => ipcRenderer.invoke('chulgo:ai-fill', payload),
   aiChat: (payload) => ipcRenderer.invoke('ai:chat', payload),
 

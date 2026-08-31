@@ -73,6 +73,7 @@ let isPinned = false;
 let firebaseHandle = null;
 
 const memoAlarmTimers = new Map(); // memoId -> Timeout
+const reminderAlarmTimers = new Map(); // reminderId -> Timeout
 
 let unsubscribeAdmins = null;
 
@@ -90,6 +91,7 @@ const TEAM_EVENT_RETRY_COOLDOWN_MS = 5 * 60 * 1000; // don't hammer the Calendar
 const teamEventSyncInFlight = new Map(); // teamEventId -> in-progress Promise (prevents duplicate creates)
 
 let unsubscribeChulgo = null;
+let unsubscribeReminders = null;
 
 const APP_ICON_PATH = path.join(__dirname, 'build', 'icon.png');
 
@@ -312,6 +314,88 @@ function handleMemosUpdate(memos) {
   });
 
   broadcastMemos('memos:update', memos);
+}
+
+// --- 고객 리마인더 알림 — 등록할 때 지정한 날짜 오전 9시에 한 번 알려준다.
+// 메모 알람(위)과 같은 패턴: 아직 안 울린 것만 타이머를 걸고, 앱이 꺼져있던 동안
+// 지나버린 날짜는 켜지자마자 바로 한 번 울려서 놓치지 않는다. ---
+
+function reminderTargetMs(r) {
+  if (!r.remindDate || r.done || r.notified) return null;
+  const [y, m, d] = r.remindDate.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d, 9, 0, 0, 0).getTime();
+}
+
+function fireReminderAlarm(r) {
+  const title = r.car ? `${r.name} (${r.car})` : r.name;
+  new Notification({ title: '📇 고객 상담 알림', body: `${title}${r.note ? ' — ' + r.note : ''}` }).show();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('reminders:alarm', r);
+  // 다시 안 울리게 알림 표식만 남긴다 — 리마인더 자체는 목록에 그대로 남는다(메모 알람과 동일한 정책).
+  firebaseClient
+    .updateReminder(firebaseHandle.db, r.id, { notified: true })
+    .catch((err) => console.error('리마인더 알림 처리 실패:', err));
+}
+
+function handleRemindersUpdate(reminders) {
+  const currentIds = new Set(reminders.map((r) => r.id));
+  for (const [id, timer] of reminderAlarmTimers) {
+    if (!currentIds.has(id)) {
+      clearTimeout(timer);
+      reminderAlarmTimers.delete(id);
+    }
+  }
+
+  reminders.forEach((r) => {
+    const targetMs = reminderTargetMs(r);
+    if (!targetMs || reminderAlarmTimers.has(r.id)) return;
+    const delay = targetMs - Date.now();
+    if (delay <= 0) {
+      fireReminderAlarm(r);
+      return;
+    }
+    // setTimeout은 ms가 너무 크면(약 24.8일 이상) 즉시 발동하는 버그가 있다 — 리마인더는
+    // 몇 달 뒤가 흔해서 실제로 걸릴 수 있는 케이스다. 하루 단위로 나눠서 다시 걸어준다.
+    const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+    const scheduleChunked = (remaining) => {
+      const chunk = Math.min(remaining, MAX_TIMEOUT_MS);
+      const timer = setTimeout(() => {
+        const left = remaining - chunk;
+        if (left <= 0) {
+          reminderAlarmTimers.delete(r.id);
+          fireReminderAlarm(r);
+        } else {
+          scheduleChunked(left);
+        }
+      }, chunk);
+      reminderAlarmTimers.set(r.id, timer);
+    };
+    scheduleChunked(delay);
+  });
+
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('reminders:update', reminders);
+}
+
+function startReminderSubscription() {
+  if (unsubscribeReminders) return;
+  const uid = firebaseHandle.auth.currentUser && firebaseHandle.auth.currentUser.uid;
+  if (!uid) return;
+  unsubscribeReminders = firebaseClient.subscribeToReminders(
+    firebaseHandle.db,
+    uid,
+    handleRemindersUpdate,
+    (err) => console.error('리마인더 subscribe error:', err)
+  );
+}
+
+function stopReminderSubscription() {
+  if (unsubscribeReminders) {
+    unsubscribeReminders();
+    unsubscribeReminders = null;
+  }
+  reminderAlarmTimers.forEach((timer) => clearTimeout(timer));
+  reminderAlarmTimers.clear();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('reminders:update', []);
 }
 
 // --- Dynamic admin list realtime ---
@@ -573,6 +657,7 @@ function setupAuthStateListener() {
       startAdminsSubscription();
       startTeamEventsSubscription();
       startChulgoSubscription();
+      startReminderSubscription();
       reconcileTeamEventsForCurrentUser().catch((err) => console.error('팀 일정 재동기화 실패:', err));
     } else {
       stopMemosSubscription();
@@ -580,6 +665,7 @@ function setupAuthStateListener() {
       stopTeamEventsSubscription();
       stopTeamEventStartDateBackfill();
       stopChulgoSubscription();
+      stopReminderSubscription();
     }
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('auth:updated', currentUserPayload());
   });
@@ -673,6 +759,9 @@ const CHANGELOG = {
   '0.35.1': [
     '금융사 비교시트 표 줄 간격을 좁혀서 스크롤 없이 더 많은 금융사가 한눈에 보입니다',
     '비교시트에서 선택한 계약기간 버튼이 흐리게 보이던 문제를 고쳐서, 선택된 상태가 확실히 눈에 띕니다',
+  ],
+  '0.36.0': [
+    '🆕 사이드바에 "고객 리마인더"를 추가했습니다 — 몇 달 뒤 다시 연락하기로 한 고객을 이름/연락처/차종/연락 예정일로 등록해두면, 그 날짜 오전 9시에 알려드립니다',
   ],
 };
 
@@ -1101,6 +1190,27 @@ ipcMain.handle('chulgo:delete', async (_e, id) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireSignedInUser();
   await firebaseClient.deleteChulgoEntry(firebaseHandle.db, id);
+});
+
+// --- 고객 리마인더 (personal — 장부와 동일한 authorUid 스코프 패턴) ---
+
+ipcMain.handle('reminders:create', async (_e, data) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  const user = requireSignedInUser();
+  return firebaseClient.createReminder(firebaseHandle.db, { ...data, authorUid: user.uid });
+});
+
+ipcMain.handle('reminders:update', async (_e, { id, ...data }) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSignedInUser();
+  delete data.authorUid;
+  await firebaseClient.updateReminder(firebaseHandle.db, id, data);
+});
+
+ipcMain.handle('reminders:delete', async (_e, id) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSignedInUser();
+  await firebaseClient.deleteReminder(firebaseHandle.db, id);
 });
 
 // 실제 회사 엑셀 템플릿을 그대로 로드해서 값만 채워넣는다 — 새로 스타일을 만들지
