@@ -1935,7 +1935,7 @@ function chulgoHasSettleDetail(e) {
 function chulgoFriendlyError(err) {
   const msg = (err && err.message) || '';
   if (msg.includes('permission-denied') || msg.includes('PERMISSION_DENIED')) {
-    return 'Firestore 보안 규칙에 chulgoEntries 컬렉션이 아직 허용되어 있지 않습니다.\nFirebase 콘솔 → Firestore Database → 규칙 탭에서 README의 규칙을 추가해주세요.';
+    return 'Firestore 보안 규칙이 아직 허용되어 있지 않습니다.\nFirebase 콘솔 → Firestore Database → 규칙 탭에서 README의 규칙을 추가·게시해주세요.';
   }
   if (msg.includes('NOT_SIGNED_IN')) {
     return '구글 로그인이 풀린 것 같습니다. 로그아웃 후 다시 로그인해주세요.';
@@ -3907,6 +3907,7 @@ const reminderCarInput = document.getElementById('reminder-car');
 const reminderDateInput = document.getElementById('reminder-date');
 const reminderNoteInput = document.getElementById('reminder-note');
 const reminderStatusEl = document.getElementById('reminder-status');
+const reminderSearchInput = document.getElementById('reminder-search');
 const REMINDER_WINDOW_SIZE_KEY = 'reminder_window_size_v1';
 const REMINDER_DEFAULT_WINDOW_SIZE = { width: 900, height: 760 };
 
@@ -3919,6 +3920,13 @@ function reminderSortedAll() {
   return [...reminders].sort((a, b) => (a.remindDate || '').localeCompare(b.remindDate || ''));
 }
 
+let reminderSearchQuery = '';
+function reminderMatchesSearch(r) {
+  if (!reminderSearchQuery) return true;
+  const haystack = [r.name, r.phone, r.car, r.note].filter(Boolean).join(' ').toLowerCase();
+  return haystack.includes(reminderSearchQuery);
+}
+
 function reminderDateLabel(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-').map(Number);
@@ -3926,26 +3934,30 @@ function reminderDateLabel(iso) {
   return `${y}.${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}(${MEMO_WEEKDAY[date.getDay()]})`;
 }
 
-function reminderBucketOf(iso) {
-  if (!iso) return 'later';
+// 기한 지남만 따로 모으고, 나머지는 실제 연·월(2026년 12월 등)로 묶는다 — "다음 달"
+// 다음부터 전부 "그 이후"에 뭉치면 몇 달치가 쌓였을 때 한눈에 안 들어와서, 달마다
+// 펼쳐 보이게 바꿨다.
+function reminderIsOverdue(iso) {
+  if (!iso) return false;
   const today = new Date();
   const [y, m, d] = iso.split('-').map(Number);
   const target = new Date(y, m - 1, d);
   target.setHours(0, 0, 0, 0);
   today.setHours(0, 0, 0, 0);
-  if (target < today) return 'overdue';
-  if (target.getFullYear() === today.getFullYear() && target.getMonth() === today.getMonth()) return 'thisMonth';
-  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  if (target.getFullYear() === nextMonth.getFullYear() && target.getMonth() === nextMonth.getMonth()) return 'nextMonth';
-  return 'later';
+  return target < today;
 }
 
-const REMINDER_BUCKETS = [
-  { key: 'overdue', label: '⚠ 기한 지남' },
-  { key: 'thisMonth', label: '이번 달' },
-  { key: 'nextMonth', label: '다음 달' },
-  { key: 'later', label: '그 이후' },
-];
+function reminderMonthKeyOf(iso) {
+  if (!iso) return '날짜 없음';
+  const [y, m] = iso.split('-');
+  return `${y}-${m}`;
+}
+
+function reminderMonthLabelOf(monthKey) {
+  if (monthKey === '날짜 없음') return monthKey;
+  const [y, m] = monthKey.split('-').map(Number);
+  return `${y}년 ${m}월`;
+}
 
 function reminderBuildRow(r) {
   const row = document.createElement('div');
@@ -4019,18 +4031,27 @@ function reminderBuildSection(label, items, extraClass) {
 }
 
 function renderReminders() {
-  const sorted = reminderSortedAll();
-  reminderCountLabel.textContent = sorted.length ? `전체 ${sorted.length}건` : '';
+  const all = reminderSortedAll();
+  const sorted = all.filter(reminderMatchesSearch);
+  reminderCountLabel.textContent = all.length ? `전체 ${all.length}건${sorted.length !== all.length ? ` · ${sorted.length}건 검색됨` : ''}` : '';
   reminderEmpty.style.display = sorted.length ? 'none' : 'block';
+  reminderEmpty.textContent = reminderSearchQuery && all.length
+    ? '검색 결과가 없습니다.'
+    : '등록된 리마인더가 없습니다. "+ 리마인더 추가"로 시작하세요.';
 
   const active = sorted.filter((r) => !r.done);
   const done = sorted.filter((r) => r.done);
 
   reminderListWrap.innerHTML = '';
 
-  REMINDER_BUCKETS.forEach(({ key, label }) => {
-    const items = active.filter((r) => reminderBucketOf(r.remindDate) === key);
-    if (items.length) reminderListWrap.appendChild(reminderBuildSection(label, items, key === 'overdue' ? 'memo-section-overdue' : ''));
+  const overdue = active.filter((r) => reminderIsOverdue(r.remindDate));
+  if (overdue.length) reminderListWrap.appendChild(reminderBuildSection('⚠ 기한 지남', overdue, 'memo-section-overdue'));
+
+  const upcoming = active.filter((r) => !reminderIsOverdue(r.remindDate));
+  const monthKeys = [...new Set(upcoming.map((r) => reminderMonthKeyOf(r.remindDate)))].sort();
+  monthKeys.forEach((monthKey) => {
+    const items = upcoming.filter((r) => reminderMonthKeyOf(r.remindDate) === monthKey);
+    reminderListWrap.appendChild(reminderBuildSection(reminderMonthLabelOf(monthKey), items));
   });
 
   if (done.length) {
@@ -4118,6 +4139,11 @@ document.getElementById('reminder-save').addEventListener('click', async () => {
   } finally {
     saveBtn.disabled = false;
   }
+});
+
+reminderSearchInput.addEventListener('input', () => {
+  reminderSearchQuery = reminderSearchInput.value.trim().toLowerCase();
+  renderReminders();
 });
 
 window.api.onReminderUpdate((items) => {

@@ -971,6 +971,21 @@ body[data-card-style='3d'] .glass-card {
 
 /* 고객 리마인더 — 메모장과 같은 섹션/체크/삭제 패턴(.memo-section 등)을 그대로 쓰고,
    행 내용만 메모(한 줄 텍스트)보다 정보가 많아서(이름/차종/날짜/연락처/메모) 두 줄로 짠다. */
+.reminder-search-input {
+  width: 100%;
+  max-width: 720px;
+  margin-top: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+.reminder-search-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
 .reminder-list-wrap {
   flex: 1;
   min-height: 0;
@@ -1023,6 +1038,9 @@ body[data-card-style='3d'] .glass-card {
 .reminder-row.done .reminder-row-line1 {
   text-decoration: line-through;
   color: var(--color-text-secondary);
+}
+.reminder-row:hover .memo-row-delete {
+  opacity: 1;
 }
 
 .reminder-form-grid {
