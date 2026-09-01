@@ -44,6 +44,10 @@
       <button class="sidebar-nav-btn" data-view="compare" title="비교시트">
         <span class="sidebar-nav-icon">📊</span><span class="sidebar-nav-label">비교시트</span>
       </button>
+      <!-- superAdmin/orgManager/teamManager에게만 renderer.js가 보여준다(일반 직원은 hidden 유지) -->
+      <button class="sidebar-nav-btn hidden" id="org-nav-btn" data-view="org" title="조직 관리">
+        <span class="sidebar-nav-icon">🏢</span><span class="sidebar-nav-label" id="org-nav-label">조직 관리</span>
+      </button>
     </nav>
 
     <div class="app-main-col">
@@ -265,6 +269,42 @@
         </div>
       </div>
     </div>
+
+    <div id="org-panel" class="view-panel hidden" data-view-pane="org">
+      <div class="glass-card org-card">
+        <div class="chulgo-header">
+          <h3><span class="chulgo-icon-badge">🏢</span> <span id="org-panel-title">조직 관리</span></h3>
+          <div class="chulgo-spacer"></div>
+          <button id="org-tab-chart" class="btn btn-secondary chulgo-mini-btn org-tab-btn active">조직도</button>
+          <button id="org-tab-ledger" class="btn btn-secondary chulgo-mini-btn org-tab-btn">조직 장부</button>
+          <button id="org-history-open" class="nav-btn chulgo-refresh-btn hidden" title="변경 이력">🕒</button>
+        </div>
+
+        <div id="org-chart-view">
+          <div class="org-toolbar">
+            <input type="text" id="org-search" class="reminder-search-input" placeholder="🔍 이름 · 이메일 · 직급 · 소속 · 팀으로 검색">
+            <select id="org-filter-org" class="org-filter-select"><option value="">전체 소속</option></select>
+            <select id="org-filter-active" class="org-filter-select">
+              <option value="active">재직만</option>
+              <option value="all">비활성 포함</option>
+            </select>
+            <div class="chulgo-spacer"></div>
+            <button id="org-add-team" class="btn btn-secondary chulgo-mini-btn hidden">+ 팀</button>
+            <button id="org-add-member" class="btn btn-primary chulgo-mini-btn hidden">+ 직원</button>
+          </div>
+          <div id="org-list-wrap" class="org-list-wrap"></div>
+          <div class="chulgo-empty" id="org-empty">표시할 직원이 없습니다.</div>
+        </div>
+
+        <div id="org-ledger-view" class="hidden">
+          <div class="org-toolbar">
+            <input type="month" id="org-ledger-month">
+            <span id="org-ledger-summary" class="chulgo-mini-hint"></span>
+          </div>
+          <div id="org-ledger-wrap" class="org-list-wrap"></div>
+        </div>
+      </div>
+    </div>
     </div>
   </div>
 
@@ -275,6 +315,16 @@
         <span>Windows 시작 시 자동 실행</span>
         <input type="checkbox" id="autostart-toggle" />
       </label>
+      <div class="theme-row">
+        <span>링크를 열 때 쓸 브라우저</span>
+        <select id="preferred-browser-select">
+          <option value="system">시스템 기본 브라우저</option>
+          <option value="chrome">Chrome</option>
+          <option value="edge">Edge</option>
+          <option value="whale">Whale</option>
+          <option value="firefox">Firefox</option>
+        </select>
+      </div>
 
       <h3 class="theme-section-title">테마 (나만 보이는 개인 설정)</h3>
 
@@ -442,6 +492,13 @@
         <button id="admin-save-btn" class="theme-reset-btn">관리자 목록 저장</button>
       </div>
 
+      <div id="org-branch-links-section" class="hidden">
+        <h3 class="theme-section-title">본부/지점별 시트 링크</h3>
+        <p class="field-label">타이틀바 "본부시트" 버튼이 각자 소속에 맞는 링크로 열립니다.</p>
+        <div id="org-branch-links-list" class="org-branch-links-list"></div>
+        <button id="org-branch-links-save" class="theme-reset-btn">시트 링크 저장</button>
+      </div>
+
       <h3 class="theme-section-title">계정</h3>
       <div id="account-delete-section">
         <p class="field-label">
@@ -505,6 +562,85 @@
         <button type="button" id="reminder-save">저장</button>
         <button type="button" id="reminder-cancel">취소</button>
         <span id="reminder-status" class="chulgo-mini-hint"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="org-member-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card">
+      <h4>직원 정보</h4>
+      <div class="reminder-form-grid">
+        <label class="reminder-form-field">
+          <span>이름</span>
+          <input type="text" id="org-member-name" maxlength="30">
+        </label>
+        <label class="reminder-form-field">
+          <span>이메일</span>
+          <input type="text" id="org-member-email" readonly>
+        </label>
+        <label class="reminder-form-field">
+          <span>소속</span>
+          <select id="org-member-org"></select>
+        </label>
+        <label class="reminder-form-field">
+          <span>팀</span>
+          <select id="org-member-team"></select>
+        </label>
+        <label class="reminder-form-field">
+          <span>직급</span>
+          <select id="org-member-position"></select>
+        </label>
+        <label class="reminder-form-field">
+          <span>시스템 권한</span>
+          <select id="org-member-permission">
+            <option value="member">일반 직원</option>
+            <option value="teamManager">팀장</option>
+            <option value="orgManager">본부장/지점장</option>
+            <option value="superAdmin">최고관리자</option>
+          </select>
+        </label>
+      </div>
+      <label class="toggle-row small">
+        <span>재직 중</span>
+        <input type="checkbox" id="org-member-active" checked>
+      </label>
+      <div class="chulgo-mini-actions">
+        <button type="button" id="org-member-save">저장</button>
+        <button type="button" id="org-member-cancel">취소</button>
+        <span id="org-member-status" class="chulgo-mini-hint"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="org-team-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card">
+      <h4 id="org-team-popup-title">팀 추가</h4>
+      <div class="reminder-form-grid">
+        <label class="reminder-form-field">
+          <span>소속</span>
+          <select id="org-team-org"></select>
+        </label>
+        <label class="reminder-form-field">
+          <span>팀 이름</span>
+          <input type="text" id="org-team-name" placeholder="1팀" maxlength="30">
+        </label>
+      </div>
+      <div class="chulgo-mini-actions">
+        <button type="button" id="org-team-save">저장</button>
+        <button type="button" id="org-team-delete" class="btn btn-danger hidden">삭제</button>
+        <button type="button" id="org-team-cancel">취소</button>
+        <span id="org-team-status" class="chulgo-mini-hint"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="org-history-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card">
+      <h4>인사이동 · 변경 이력</h4>
+      <div id="org-history-list" class="org-history-list"></div>
+      <div class="chulgo-mini-actions">
+        <div class="chulgo-spacer"></div>
+        <button type="button" id="org-history-close">닫기</button>
       </div>
     </div>
   </div>

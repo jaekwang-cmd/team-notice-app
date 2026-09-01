@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('api', {
 
   getAutostart: () => ipcRenderer.invoke('settings:get-autostart'),
   setAutostart: (enabled) => ipcRenderer.invoke('settings:set-autostart', enabled),
+  getPreferredBrowser: () => ipcRenderer.invoke('settings:get-preferred-browser'),
+  setPreferredBrowser: (value) => ipcRenderer.invoke('settings:set-preferred-browser', value),
   getConfigStatus: () => ipcRenderer.invoke('config:status'),
   getIsDev: () => ipcRenderer.invoke('app:is-dev'),
 
@@ -77,6 +79,22 @@ contextBridge.exposeInMainWorld('api', {
   onReminderAlarm: (callback) => {
     ipcRenderer.on('reminders:alarm', (_event, reminder) => callback(reminder));
   },
+
+  getOrgConstants: () => ipcRenderer.invoke('org:get-constants'),
+  getMyOrgInfo: () => ipcRenderer.invoke('org:get-my-info'),
+  onOrgMyInfoUpdate: (callback) => {
+    ipcRenderer.on('org:my-info-update', (_event, info) => callback(info));
+  },
+  getOrgMembers: () => ipcRenderer.invoke('org:get-members'),
+  upsertOrgMember: (payload) => ipcRenderer.invoke('org:upsert-member', payload),
+  getOrgTeams: () => ipcRenderer.invoke('org:get-teams'),
+  createOrgTeam: (payload) => ipcRenderer.invoke('org:create-team', payload),
+  updateOrgTeam: (payload) => ipcRenderer.invoke('org:update-team', payload),
+  deleteOrgTeam: (id) => ipcRenderer.invoke('org:delete-team', id),
+  getOrgHistory: () => ipcRenderer.invoke('org:get-history'),
+  getBranchLinks: () => ipcRenderer.invoke('org:get-branch-links'),
+  setBranchLinks: (links) => ipcRenderer.invoke('org:set-branch-links', links),
+  getOrgLedgerForScope: (payload) => ipcRenderer.invoke('org:get-ledger-for-scope', payload),
   aiFillChulgo: (payload) => ipcRenderer.invoke('chulgo:ai-fill', payload),
   aiChat: (payload) => ipcRenderer.invoke('ai:chat', payload),
 

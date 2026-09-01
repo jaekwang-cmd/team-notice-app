@@ -314,6 +314,163 @@ async function deleteReminder(db, id) {
   await deleteDoc(doc(db, 'customerReminders', id));
 }
 
+// --- 조직 관리 (본부/지점/팀/직급/권한) ---
+// orgMembers/{uid} — 계정마다 하나. 최초 로그인 시 본인이 "존재 등록"(create)만 할 수 있고,
+// 이후 조직/팀/직급/권한 변경은 Firestore 규칙상 superAdmin만 가능(update). 그래서 이
+// 컬렉션이 동시에 "이 앱에 로그인해본 계정 전체 목록"과 "조직도"를 겸한다.
+const ORG_MEMBER_DEFAULTS = {
+  name: '',
+  organization: null, // 예: '본사-3본부' | '양주지점' 등 7개 고정값 중 하나, 미배정이면 null
+  teamId: null,
+  position: '',
+  permission: 'member', // superAdmin | orgManager | teamManager | member
+  active: true,
+};
+
+async function ensureOrgMemberRecord(db, user) {
+  const ref = doc(db, 'orgMembers', user.uid);
+  try {
+    // 이미 존재하면(=배정된 적 있으면) Firestore 규칙이 update로 보고 막는다 — 그게
+    // 의도한 동작이다(자기 자신의 소속/권한을 스스로 덮어쓰지 못하게). 여기선 그냥
+    // "처음 로그인한 사람" 최초 1회 등록만 성공하면 된다.
+    await setDoc(ref, {
+      ...ORG_MEMBER_DEFAULTS,
+      uid: user.uid,
+      email: user.email || '',
+      name: user.displayName || '',
+      createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+    });
+  } catch (err) {
+    if (err && err.code !== 'permission-denied') throw err;
+    // 이미 등록된 사용자 — 조용히 무시. lastLoginAt 갱신은 본인 update라 이것도
+    // superAdmin 전용 규칙에 막히므로, 로그인 시각은 필요하면 나중에 별도 필드로 뺀다.
+  }
+}
+
+function orgMemberFromSnap(docSnap) {
+  const data = docSnap.data();
+  return {
+    uid: docSnap.id,
+    email: data.email || '',
+    name: data.name || '',
+    organization: data.organization || null,
+    teamId: data.teamId || null,
+    position: data.position || '',
+    permission: data.permission || 'member',
+    active: data.active !== false,
+  };
+}
+
+function subscribeToOrgMemberSelf(db, uid, onUpdate, onError) {
+  return onSnapshot(doc(db, 'orgMembers', uid), (docSnap) => {
+    onUpdate(docSnap.exists() ? orgMemberFromSnap(docSnap) : null);
+  }, onError);
+}
+
+// superAdmin용 — 전체. Firestore 규칙이 실제 권한 없는 요청은 거부하므로, 여기선
+// "부르는 쪽이 정당한 권한인지"를 다시 검증하지 않는다(규칙이 최종 방어선).
+async function getAllOrgMembers(db) {
+  const snapshot = await getDocs(collection(db, 'orgMembers'));
+  return snapshot.docs.map(orgMemberFromSnap);
+}
+
+async function getOrgMembersByOrganization(db, organization) {
+  const q = query(collection(db, 'orgMembers'), where('organization', '==', organization));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(orgMemberFromSnap);
+}
+
+async function getOrgMembersByTeam(db, teamId) {
+  const q = query(collection(db, 'orgMembers'), where('teamId', '==', teamId));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(orgMemberFromSnap);
+}
+
+async function updateOrgMember(db, uid, data) {
+  await updateDoc(doc(db, 'orgMembers', uid), { ...data, updatedAt: serverTimestamp() });
+}
+
+// --- 팀 (본부/지점 안의 하위 조직) ---
+
+function orgTeamFromSnap(docSnap) {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    organization: data.organization || '',
+    teamName: data.teamName || '',
+    teamManagerUid: data.teamManagerUid || null,
+    order: data.order || 0,
+  };
+}
+
+function subscribeToOrgTeams(db, onUpdate, onError) {
+  return onSnapshot(collection(db, 'orgTeams'), (snapshot) => {
+    onUpdate(snapshot.docs.map(orgTeamFromSnap));
+  }, onError);
+}
+
+async function createOrgTeam(db, data) {
+  const ref = await addDoc(collection(db, 'orgTeams'), { ...data, createdAt: serverTimestamp() });
+  return ref.id;
+}
+
+async function updateOrgTeam(db, id, data) {
+  await updateDoc(doc(db, 'orgTeams', id), data);
+}
+
+async function deleteOrgTeam(db, id) {
+  await deleteDoc(doc(db, 'orgTeams', id));
+}
+
+// --- 인사이동/변경 로그 (superAdmin 전용) ---
+
+async function addOrgHistory(db, entry) {
+  await addDoc(collection(db, 'orgHistory'), { ...entry, at: serverTimestamp() });
+}
+
+function subscribeToOrgHistory(db, onUpdate, onError) {
+  const q = query(collection(db, 'orgHistory'));
+  return onSnapshot(q, (snapshot) => {
+    const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    items.sort((a, b) => (b.at?.toMillis?.() || 0) - (a.at?.toMillis?.() || 0));
+    onUpdate(items);
+  }, onError);
+}
+
+// --- 본부/지점별 외부 시트 링크 (settings/branchLinks 문서 하나에 map으로 저장) ---
+
+async function getBranchLinks(db) {
+  const snap = await getDoc(doc(db, 'settings', 'branchLinks'));
+  return snap.exists() ? snap.data() : {};
+}
+
+async function setBranchLinks(db, links) {
+  await setDoc(doc(db, 'settings', 'branchLinks'), links);
+}
+
+// --- 조직 장부(관리자 조회 전용) — 담당 범위 uid 목록으로 이번 달 항목을 모아온다.
+// Firestore 'in'은 한 번에 최대 30개까지라, 그보다 많으면 나눠서 여러 번 쿼리한다. ---
+
+async function getChulgoEntriesForAuthors(db, uids, month) {
+  if (!uids.length) return [];
+  const chunks = [];
+  for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
+
+  const results = await Promise.all(
+    chunks.map(async (chunk) => {
+      const q = query(
+        collection(db, 'chulgoEntries'),
+        where('authorUid', 'in', chunk),
+        where('month', '==', month)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    })
+  );
+  return results.flat();
+}
+
 module.exports = {
   initFirebase,
   signInWithGoogleIdToken,
@@ -336,4 +493,19 @@ module.exports = {
   createReminder,
   updateReminder,
   deleteReminder,
+  ensureOrgMemberRecord,
+  subscribeToOrgMemberSelf,
+  getAllOrgMembers,
+  getOrgMembersByOrganization,
+  getOrgMembersByTeam,
+  updateOrgMember,
+  subscribeToOrgTeams,
+  createOrgTeam,
+  updateOrgTeam,
+  deleteOrgTeam,
+  addOrgHistory,
+  subscribeToOrgHistory,
+  getBranchLinks,
+  setBranchLinks,
+  getChulgoEntriesForAuthors,
 };

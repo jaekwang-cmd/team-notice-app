@@ -1072,6 +1072,178 @@ body[data-card-style='3d'] .glass-card {
   margin-bottom: 4px;
 }
 
+/* 조직 관리 — 직원 배치도(카드형) + 조직 장부 */
+.org-tab-btn.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-button-text);
+}
+.org-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+.org-toolbar .reminder-search-input {
+  margin-top: 0;
+  flex: 1;
+  min-width: 220px;
+  max-width: 420px;
+}
+.org-filter-select {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 12.5px;
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+.org-list-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.org-unit-block {
+  margin-bottom: 22px;
+}
+.org-unit-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.org-unit-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+.org-unit-manager {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+.org-unit-manager.vacant {
+  color: var(--color-accent);
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.org-teams-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.org-team-card {
+  flex: 1 1 220px;
+  min-width: 200px;
+  max-width: 280px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 14px);
+  background: var(--color-panel-tint-dark, var(--color-input-bg));
+  padding: 12px;
+}
+.org-team-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.org-team-card-title {
+  font-weight: 700;
+  font-size: 13px;
+}
+.org-team-manager {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+.org-team-manager.vacant {
+  color: var(--color-accent);
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+.org-team-edit-btn {
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.org-team-edit-btn:hover {
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+
+.org-member-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-standard);
+}
+.org-member-card:hover {
+  background: var(--color-input-bg);
+}
+.org-member-card.inactive {
+  opacity: 0.5;
+}
+.org-member-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.org-member-position {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+.org-member-detail {
+  display: none;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  padding: 4px 8px 8px;
+  line-height: 1.5;
+}
+.org-member-card.expanded .org-member-detail {
+  display: block;
+}
+
+.org-history-list {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.org-history-row {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.org-history-row:last-child {
+  border-bottom: none;
+}
+.org-history-when {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+
+.org-branch-links-list .theme-row input.org-branch-link-input {
+  flex: 1;
+  max-width: 320px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 12px;
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+
 .memo-card .memo-alarm-row,
 .memo-card .notice-input {
   max-width: 640px;

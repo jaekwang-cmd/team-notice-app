@@ -1284,6 +1284,10 @@ pinBtn.onclick = async () => {
 // --- Settings panel ---
 const settingsPanel = document.getElementById('settings-panel');
 const autostartToggle = document.getElementById('autostart-toggle');
+const preferredBrowserSelect = document.getElementById('preferred-browser-select');
+preferredBrowserSelect.addEventListener('change', () => {
+  window.api.setPreferredBrowser(preferredBrowserSelect.value);
+});
 
 const adminSection = document.getElementById('admin-section');
 const rootAdminList = document.getElementById('root-admin-list');
@@ -1301,6 +1305,8 @@ autostartToggle.addEventListener('change', () => {
 
 document.getElementById('btn-settings').onclick = async () => {
   autostartToggle.checked = await window.api.getAutostart();
+  preferredBrowserSelect.value = await window.api.getPreferredBrowser();
+  orgRenderBranchLinksEditor();
   const theme = await window.api.getTheme();
   lastSavedTheme = theme;
   fillThemeInputs(theme);
@@ -4155,6 +4161,496 @@ window.api.onReminderAlarm((r) => {
   showToast(`📇 ${r.name}${r.car ? ` (${r.car})` : ''} 연락할 때예요${r.note ? ' — ' + r.note : ''}`);
 });
 
+// ─── 조직 관리 (본부/지점/팀/직급/권한) ──────────────────────────────────────
+// superAdmin은 전체를 배정/수정, orgManager(본부장/지점장)·teamManager(팀장)는 자기
+// 담당 범위를 조회만 한다 — 화면에 뜨는 버튼 자체를 권한별로 다르게 구성해서 처리한다
+// (실제 쓰기 차단은 Firestore 규칙이 최종 방어선).
+const orgPanel = document.getElementById('org-panel');
+const orgNavBtn = document.getElementById('org-nav-btn');
+const orgNavLabel = document.getElementById('org-nav-label');
+const orgPanelTitle = document.getElementById('org-panel-title');
+const orgListWrap = document.getElementById('org-list-wrap');
+const orgEmpty = document.getElementById('org-empty');
+const orgSearchInput = document.getElementById('org-search');
+const orgFilterOrgSelect = document.getElementById('org-filter-org');
+const orgFilterActiveSelect = document.getElementById('org-filter-active');
+const orgAddTeamBtn = document.getElementById('org-add-team');
+const orgAddMemberBtn = document.getElementById('org-add-member');
+const orgHistoryOpenBtn = document.getElementById('org-history-open');
+const orgChartView = document.getElementById('org-chart-view');
+const orgLedgerView = document.getElementById('org-ledger-view');
+const orgLedgerMonthInput = document.getElementById('org-ledger-month');
+const orgLedgerSummaryEl = document.getElementById('org-ledger-summary');
+const orgLedgerWrap = document.getElementById('org-ledger-wrap');
+const ORG_WINDOW_SIZE_KEY = 'org_window_size_v1';
+const ORG_DEFAULT_WINDOW_SIZE = { width: 1400, height: 900 };
+
+let orgConstants = null; // { organizations, positionsByType, permissions }
+let myOrgInfo = null;
+let orgMembersCache = [];
+let orgTeamsCache = [];
+let orgSearchQuery = '';
+let orgFilterOrg = '';
+let orgFilterActiveOnly = true;
+let orgMemberEditingUid = null;
+let orgTeamEditingId = null;
+
+function orgTypeOf(orgKey) {
+  const found = (orgConstants?.organizations || []).find((o) => o.key === orgKey);
+  return found ? found.type : null;
+}
+function orgLabelOf(orgKey) {
+  const found = (orgConstants?.organizations || []).find((o) => o.key === orgKey);
+  return found ? found.label : (orgKey || '미배정');
+}
+
+function orgFillSelect(selectEl, options, { placeholder } = {}) {
+  selectEl.innerHTML = '';
+  if (placeholder) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = placeholder;
+    selectEl.appendChild(opt);
+  }
+  options.forEach(({ value, label }) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    selectEl.appendChild(opt);
+  });
+}
+
+async function orgLoadConstantsOnce() {
+  if (orgConstants) return orgConstants;
+  orgConstants = await window.api.getOrgConstants();
+  orgFillSelect(orgFilterOrgSelect, orgConstants.organizations.map((o) => ({ value: o.key, label: o.label })), { placeholder: '전체 소속' });
+  return orgConstants;
+}
+
+// 사이드바 노출 여부 — superAdmin/orgManager/teamManager만. 시스템 권한이 바뀌면
+// (예: 재광님이 다른 사람을 superAdmin으로 바꿈) 실시간으로 즉시 반영된다.
+function orgApplyMyInfo(info) {
+  myOrgInfo = info;
+  const scope = info && ['superAdmin', 'orgManager', 'teamManager'].includes(info.permission) ? info.permission : null;
+  orgNavBtn.classList.toggle('hidden', !scope);
+  document.getElementById('org-branch-links-section').classList.toggle('hidden', info?.permission !== 'superAdmin');
+  if (!scope) return;
+  orgNavLabel.textContent = scope === 'superAdmin' ? '조직 관리' : '우리 조직';
+  orgPanelTitle.textContent = scope === 'superAdmin' ? '조직 관리' : '우리 조직';
+  orgAddMemberBtn.classList.toggle('hidden', scope !== 'superAdmin');
+  orgAddTeamBtn.classList.toggle('hidden', scope !== 'superAdmin');
+  orgHistoryOpenBtn.classList.toggle('hidden', scope !== 'superAdmin');
+}
+
+// 본부/지점별 시트 링크(superAdmin 전용) — 설정 화면 열릴 때 채운다.
+async function orgRenderBranchLinksEditor() {
+  const section = document.getElementById('org-branch-links-section');
+  if (section.classList.contains('hidden')) return;
+  await orgLoadConstantsOnce();
+  const links = await window.api.getBranchLinks();
+  const listEl = document.getElementById('org-branch-links-list');
+  listEl.innerHTML = '';
+  orgConstants.organizations.forEach((org) => {
+    const row = document.createElement('div');
+    row.className = 'theme-row';
+    row.innerHTML = `<span>${escapeHtml(org.label)}</span>
+      <input type="text" class="org-branch-link-input" data-org="${org.key}" placeholder="https://docs.google.com/..." value="${escapeHtml(links[org.key] || '')}">`;
+    listEl.appendChild(row);
+  });
+}
+
+document.getElementById('org-branch-links-save').addEventListener('click', async () => {
+  const links = {};
+  document.querySelectorAll('.org-branch-link-input').forEach((input) => {
+    if (input.value.trim()) links[input.dataset.org] = input.value.trim();
+  });
+  try {
+    await window.api.setBranchLinks(links);
+    showToast('시트 링크가 저장되었습니다.');
+  } catch (err) {
+    showToast(chulgoFriendlyError(err));
+  }
+});
+
+window.api.onOrgMyInfoUpdate(orgApplyMyInfo);
+window.api.getMyOrgInfo().then(orgApplyMyInfo).catch(() => {});
+
+async function orgFetchMembers() {
+  await orgLoadConstantsOnce();
+  const [members, teams] = await Promise.all([window.api.getOrgMembers(), window.api.getOrgTeams()]);
+  orgMembersCache = members;
+  orgTeamsCache = teams.sort((a, b) => a.order - b.order);
+}
+
+function orgMatchesSearch(m) {
+  if (!orgSearchQuery) return true;
+  const team = orgTeamsCache.find((t) => t.id === m.teamId);
+  const haystack = [m.name, m.email, m.position, orgLabelOf(m.organization), team?.teamName].filter(Boolean).join(' ').toLowerCase();
+  return haystack.includes(orgSearchQuery);
+}
+
+function orgMemberCardHTML(m) {
+  const team = orgTeamsCache.find((t) => t.id === m.teamId);
+  return `
+    <div class="org-member-card${m.active ? '' : ' inactive'}" data-uid="${m.uid}">
+      <div>
+        <div class="org-member-name">${escapeHtml(m.name || '(이름 미설정)')}</div>
+        <div class="org-member-position">${escapeHtml(m.position || '-')}${m.active ? '' : ' · 비활성'}</div>
+      </div>
+    </div>
+    <div class="org-member-detail" data-detail-for="${m.uid}">
+      이메일: ${escapeHtml(m.email)}<br>
+      소속: ${escapeHtml(orgLabelOf(m.organization))} ${team ? '· ' + escapeHtml(team.teamName) : ''}<br>
+      권한: ${escapeHtml(orgPermissionLabel(m.permission))}<br>
+      상태: ${m.active ? '재직' : '비활성'}
+    </div>`;
+}
+
+function orgPermissionLabel(p) {
+  return { superAdmin: '최고관리자', orgManager: '본부장/지점장', teamManager: '팀장', member: '일반 직원' }[p] || p;
+}
+
+function renderOrgChart() {
+  const canEdit = myOrgInfo && myOrgInfo.permission === 'superAdmin';
+  const visibleMembers = orgMembersCache.filter((m) => (orgFilterActiveOnly ? m.active : true) && orgMatchesSearch(m));
+  const orgs = orgFilterOrg
+    ? (orgConstants.organizations || []).filter((o) => o.key === orgFilterOrg)
+    : (orgConstants.organizations || []);
+
+  orgListWrap.innerHTML = '';
+  let anyShown = false;
+
+  orgs.forEach((org) => {
+    const orgMembers = visibleMembers.filter((m) => m.organization === org.key);
+    const orgTeamsHere = orgTeamsCache.filter((t) => t.organization === org.key);
+    // superAdmin은 소속에 인원이 하나도 없어도 구조 자체는 보여준다(공석 배정을 위해).
+    if (!canEdit && orgMembers.length === 0 && orgFilterOrg !== org.key) return;
+    anyShown = true;
+
+    const topPosition = org.type === 'hq' ? '본부장' : '지점장';
+    const topManager = orgMembers.find((m) => m.position === topPosition && !m.teamId);
+
+    const block = document.createElement('div');
+    block.className = 'org-unit-block';
+
+    const head = document.createElement('div');
+    head.className = 'org-unit-head';
+    head.innerHTML = `
+      <span class="org-unit-title">${escapeHtml(org.label)}</span>
+      <span class="org-unit-manager${topManager ? '' : ' vacant'}" data-vacant-org="${org.key}" data-vacant-position="${topPosition}">
+        ${topManager ? `${escapeHtml(topManager.name)} ${escapeHtml(topPosition)}` : `${topPosition} 공석${canEdit ? ' (클릭해서 배정)' : ''}`}
+      </span>`;
+    block.appendChild(head);
+
+    const teamsRow = document.createElement('div');
+    teamsRow.className = 'org-teams-row';
+    orgTeamsHere.forEach((team) => {
+      const teamMembers = orgMembers.filter((m) => m.teamId === team.id);
+      const manager = teamMembers.find((m) => m.uid === team.teamManagerUid);
+      const others = teamMembers.filter((m) => m.uid !== team.teamManagerUid);
+
+      const card = document.createElement('div');
+      card.className = 'org-team-card';
+      card.innerHTML = `
+        <div class="org-team-card-head">
+          <span class="org-team-card-title">${escapeHtml(team.teamName)}</span>
+          ${canEdit ? `<button type="button" class="org-team-edit-btn" data-edit-team="${team.id}">✎</button>` : ''}
+        </div>
+        <div class="org-team-manager${manager ? '' : ' vacant'}" data-vacant-team="${team.id}">
+          ${manager ? `👑 ${escapeHtml(manager.name)} ${escapeHtml(manager.position)}` : `팀장 공석${canEdit ? ' (클릭해서 배정)' : ''}`}
+        </div>
+        <div class="org-team-members"></div>`;
+      const membersWrap = card.querySelector('.org-team-members');
+      others.forEach((m) => {
+        membersWrap.insertAdjacentHTML('beforeend', orgMemberCardHTML(m));
+      });
+      teamsRow.appendChild(card);
+    });
+    block.appendChild(teamsRow);
+    orgListWrap.appendChild(block);
+  });
+
+  orgEmpty.style.display = anyShown ? 'none' : 'block';
+}
+
+// 카드 클릭(펼치기) / 공석 클릭(배정) / 팀 수정 버튼 — 위임 처리
+orgListWrap.addEventListener('click', (ev) => {
+  const memberCard = ev.target.closest('.org-member-card');
+  const vacantOrg = ev.target.closest('[data-vacant-org]');
+  const vacantTeam = ev.target.closest('[data-vacant-team]');
+  const editTeamBtn = ev.target.closest('[data-edit-team]');
+
+  if (editTeamBtn) {
+    orgOpenTeamPopup(orgTeamsCache.find((t) => t.id === editTeamBtn.dataset.editTeam));
+    return;
+  }
+  if (vacantOrg && myOrgInfo?.permission === 'superAdmin') {
+    orgOpenMemberPopup(null, { organization: vacantOrg.dataset.vacantOrg, position: vacantOrg.dataset.vacantPosition });
+    return;
+  }
+  if (vacantTeam && myOrgInfo?.permission === 'superAdmin') {
+    const team = orgTeamsCache.find((t) => t.id === vacantTeam.dataset.vacantTeam);
+    orgOpenMemberPopup(null, { organization: team.organization, teamId: team.id, position: '팀장' });
+    return;
+  }
+  if (memberCard) {
+    if (myOrgInfo?.permission === 'superAdmin') {
+      orgOpenMemberPopup(orgMembersCache.find((m) => m.uid === memberCard.dataset.uid));
+    } else {
+      memberCard.classList.toggle('expanded');
+    }
+  }
+});
+
+function orgOpenMemberPopup(member, presetForVacant) {
+  orgMemberEditingUid = member ? member.uid : null;
+  document.getElementById('org-member-name').value = member ? member.name : '(신규 배정은 먼저 로그인한 계정 목록에서 고르세요)';
+  document.getElementById('org-member-email').value = member ? member.email : '';
+  document.getElementById('org-member-active').checked = member ? member.active : true;
+
+  const orgSelect = document.getElementById('org-member-org');
+  orgFillSelect(orgSelect, orgConstants.organizations.map((o) => ({ value: o.key, label: o.label })));
+  const initialOrg = member ? member.organization : (presetForVacant?.organization || orgConstants.organizations[0].key);
+  orgSelect.value = initialOrg;
+
+  const permSelect = document.getElementById('org-member-permission');
+  permSelect.value = member ? member.permission : 'member';
+
+  orgRefreshMemberPositionAndTeamSelects(initialOrg, member, presetForVacant);
+  document.getElementById('org-member-status').textContent = member
+    ? ''
+    : '⚠ 새 계정 배정은 아직 지원하지 않아요 — 그 계정으로 한 번 로그인한 뒤, 목록에서 골라 배정해주세요.';
+  document.getElementById('org-member-popup').classList.remove('hidden');
+}
+
+function orgRefreshMemberPositionAndTeamSelects(orgKey, member, presetForVacant) {
+  const type = orgTypeOf(orgKey);
+  const positionSelect = document.getElementById('org-member-position');
+  orgFillSelect(positionSelect, (orgConstants.positionsByType[type] || []).map((p) => ({ value: p, label: p })));
+  positionSelect.value = member ? member.position : (presetForVacant?.position || positionSelect.options[0]?.value || '');
+
+  const teamSelect = document.getElementById('org-member-team');
+  const teamsHere = orgTeamsCache.filter((t) => t.organization === orgKey);
+  orgFillSelect(teamSelect, teamsHere.map((t) => ({ value: t.id, label: t.teamName })), { placeholder: '(팀 없음 — 본부장/지점장 등)' });
+  teamSelect.value = member ? (member.teamId || '') : (presetForVacant?.teamId || '');
+}
+
+document.getElementById('org-member-org').addEventListener('change', (ev) => {
+  orgRefreshMemberPositionAndTeamSelects(ev.target.value, orgMemberEditingUid ? orgMembersCache.find((m) => m.uid === orgMemberEditingUid) : null);
+});
+
+document.getElementById('org-member-cancel').addEventListener('click', () => {
+  document.getElementById('org-member-popup').classList.add('hidden');
+});
+
+document.getElementById('org-member-save').addEventListener('click', async () => {
+  if (!orgMemberEditingUid) { document.getElementById('org-member-popup').classList.add('hidden'); return; }
+  const statusEl = document.getElementById('org-member-status');
+  const payload = {
+    uid: orgMemberEditingUid,
+    name: document.getElementById('org-member-name').value.trim(),
+    organization: document.getElementById('org-member-org').value,
+    teamId: document.getElementById('org-member-team').value || null,
+    position: document.getElementById('org-member-position').value,
+    permission: document.getElementById('org-member-permission').value,
+    active: document.getElementById('org-member-active').checked,
+  };
+  statusEl.textContent = '저장 중...';
+  try {
+    await window.api.upsertOrgMember(payload);
+    document.getElementById('org-member-popup').classList.add('hidden');
+    await orgFetchMembers();
+    renderOrgChart();
+  } catch (err) {
+    console.error('직원 정보 저장 실패:', err);
+    statusEl.textContent = chulgoFriendlyError(err);
+  }
+});
+
+function orgOpenTeamPopup(team) {
+  orgTeamEditingId = team ? team.id : null;
+  document.getElementById('org-team-popup-title').textContent = team ? '팀 수정' : '팀 추가';
+  const orgSelect = document.getElementById('org-team-org');
+  orgFillSelect(orgSelect, orgConstants.organizations.map((o) => ({ value: o.key, label: o.label })));
+  orgSelect.value = team ? team.organization : orgFilterOrg || orgConstants.organizations[0].key;
+  document.getElementById('org-team-name').value = team ? team.teamName : '';
+  document.getElementById('org-team-delete').classList.toggle('hidden', !team);
+  document.getElementById('org-team-status').textContent = '';
+  document.getElementById('org-team-popup').classList.remove('hidden');
+}
+
+orgAddTeamBtn.addEventListener('click', () => orgOpenTeamPopup(null));
+document.getElementById('org-team-cancel').addEventListener('click', () => {
+  document.getElementById('org-team-popup').classList.add('hidden');
+});
+
+document.getElementById('org-team-save').addEventListener('click', async () => {
+  const statusEl = document.getElementById('org-team-status');
+  const organization = document.getElementById('org-team-org').value;
+  const teamName = document.getElementById('org-team-name').value.trim();
+  if (!teamName) { statusEl.textContent = '팀 이름을 입력해주세요.'; return; }
+  statusEl.textContent = '저장 중...';
+  try {
+    if (orgTeamEditingId) {
+      await window.api.updateOrgTeam({ id: orgTeamEditingId, organization, teamName });
+    } else {
+      const order = orgTeamsCache.filter((t) => t.organization === organization).length;
+      await window.api.createOrgTeam({ organization, teamName, order, teamManagerUid: null });
+    }
+    document.getElementById('org-team-popup').classList.add('hidden');
+    await orgFetchMembers();
+    renderOrgChart();
+  } catch (err) {
+    console.error('팀 저장 실패:', err);
+    statusEl.textContent = chulgoFriendlyError(err);
+  }
+});
+
+document.getElementById('org-team-delete').addEventListener('click', async () => {
+  if (!orgTeamEditingId) return;
+  if (!confirm('이 팀을 삭제할까요? (배정된 직원이 있으면 삭제되지 않아요)')) return;
+  const statusEl = document.getElementById('org-team-status');
+  try {
+    await window.api.deleteOrgTeam(orgTeamEditingId);
+    document.getElementById('org-team-popup').classList.add('hidden');
+    await orgFetchMembers();
+    renderOrgChart();
+  } catch (err) {
+    statusEl.textContent = err.message === 'TEAM_HAS_MEMBERS' ? '이 팀에 배정된 직원이 있어 삭제할 수 없어요.' : chulgoFriendlyError(err);
+  }
+});
+
+orgAddMemberBtn.addEventListener('click', () => {
+  showToast('신규 계정 배정은 "이미 한 번 로그인한 계정"만 가능해요 — 목록에서 직원 카드를 눌러 배정해주세요.');
+});
+
+orgSearchInput.addEventListener('input', () => {
+  orgSearchQuery = orgSearchInput.value.trim().toLowerCase();
+  renderOrgChart();
+});
+orgFilterOrgSelect.addEventListener('change', () => {
+  orgFilterOrg = orgFilterOrgSelect.value;
+  renderOrgChart();
+});
+orgFilterActiveSelect.addEventListener('change', () => {
+  orgFilterActiveOnly = orgFilterActiveSelect.value === 'active';
+  renderOrgChart();
+});
+
+document.getElementById('org-tab-chart').addEventListener('click', () => orgSwitchTab('chart'));
+document.getElementById('org-tab-ledger').addEventListener('click', () => orgSwitchTab('ledger'));
+
+function orgSwitchTab(tab) {
+  document.getElementById('org-tab-chart').classList.toggle('active', tab === 'chart');
+  document.getElementById('org-tab-ledger').classList.toggle('active', tab === 'ledger');
+  orgChartView.classList.toggle('hidden', tab !== 'chart');
+  orgLedgerView.classList.toggle('hidden', tab !== 'ledger');
+  if (tab === 'ledger') renderOrgLedger();
+}
+
+function orgCurrentLedgerMonth() {
+  return orgLedgerMonthInput.value || new Date().toISOString().slice(0, 7);
+}
+
+async function renderOrgLedger() {
+  if (!orgLedgerMonthInput.value) orgLedgerMonthInput.value = orgCurrentLedgerMonth();
+  const month = orgCurrentLedgerMonth();
+  orgLedgerWrap.innerHTML = '<div class="chulgo-mini-hint">불러오는 중...</div>';
+  let data;
+  try {
+    data = await window.api.getOrgLedgerForScope({ month });
+  } catch (err) {
+    orgLedgerWrap.innerHTML = `<div class="chulgo-mini-hint">${escapeHtml(chulgoFriendlyError(err))}</div>`;
+    return;
+  }
+
+  const { members, entries } = data;
+  const teamsById = new Map(orgTeamsCache.map((t) => [t.id, t]));
+  const entriesByAuthor = new Map();
+  entries.forEach((e) => {
+    if (!entriesByAuthor.has(e.authorUid)) entriesByAuthor.set(e.authorUid, []);
+    entriesByAuthor.get(e.authorUid).push(e);
+  });
+
+  let totalCount = 0;
+  let totalFee = 0;
+
+  const grouped = new Map(); // teamId(or 'none') -> members[]
+  members.filter((m) => m.active).forEach((m) => {
+    const key = m.teamId || 'none';
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(m);
+  });
+
+  orgLedgerWrap.innerHTML = '';
+  grouped.forEach((teamMembers, teamId) => {
+    const team = teamsById.get(teamId);
+    const section = document.createElement('div');
+    section.className = 'org-unit-block';
+    const head = document.createElement('div');
+    head.className = 'org-unit-head';
+    head.innerHTML = `<span class="org-unit-title">${escapeHtml(team ? team.teamName : '팀 미배정')}</span>`;
+    section.appendChild(head);
+
+    teamMembers.forEach((m) => {
+      const myEntries = entriesByAuthor.get(m.uid) || [];
+      const feeSum = myEntries.reduce((a, e) => a + window.ChulgoCalc.chulgoComputedFee(e, m.position), 0);
+      totalCount += myEntries.length;
+      totalFee += feeSum;
+
+      const row = document.createElement('div');
+      row.className = 'org-member-card';
+      row.innerHTML = `
+        <div>
+          <div class="org-member-name">${escapeHtml(m.name)} <span class="org-member-position">${escapeHtml(m.position)}</span></div>
+          <div class="org-member-position">출고 ${myEntries.length}건</div>
+        </div>
+        <div class="org-member-name">${escapeHtml(chulgoWon(feeSum))}</div>`;
+      section.appendChild(row);
+    });
+    orgLedgerWrap.appendChild(section);
+  });
+
+  orgLedgerSummaryEl.textContent = `총 출고 ${totalCount}건 · 합계 ${chulgoWon(totalFee)}`;
+}
+
+orgLedgerMonthInput.addEventListener('change', renderOrgLedger);
+
+orgHistoryOpenBtn.addEventListener('click', async () => {
+  const listEl = document.getElementById('org-history-list');
+  listEl.innerHTML = '불러오는 중...';
+  document.getElementById('org-history-popup').classList.remove('hidden');
+  try {
+    const items = await window.api.getOrgHistory();
+    listEl.innerHTML = items.length ? '' : '기록이 없습니다.';
+    items.forEach((h) => {
+      const row = document.createElement('div');
+      row.className = 'org-history-row';
+      const when = h.at?.seconds ? new Date(h.at.seconds * 1000).toLocaleString('ko-KR') : '';
+      row.innerHTML = `<div class="org-history-when">${escapeHtml(when)}</div>${escapeHtml(orgHistoryLine(h))}`;
+      listEl.appendChild(row);
+    });
+  } catch (err) {
+    listEl.innerHTML = escapeHtml(chulgoFriendlyError(err));
+  }
+});
+document.getElementById('org-history-close').addEventListener('click', () => {
+  document.getElementById('org-history-popup').classList.add('hidden');
+});
+
+function orgHistoryLine(h) {
+  if (h.type === 'member_update') {
+    const b = h.before || {};
+    const a = h.after || {};
+    return `직원 정보 변경 — ${orgLabelOf(b.organization)}/${b.position || '-'} → ${orgLabelOf(a.organization)}/${a.position || '-'} (권한: ${orgPermissionLabel(a.permission)})`;
+  }
+  if (h.type === 'team_create') return `팀 생성 — ${orgLabelOf(h.organization)} · ${h.teamName}`;
+  if (h.type === 'team_update') return `팀 수정 — ${JSON.stringify(h.changes)}`;
+  if (h.type === 'team_delete') return `팀 삭제`;
+  if (h.type === 'branch_links_update') return `본부/지점 시트 링크 설정 변경`;
+  return h.type || '변경';
+}
+
 // ─── 금융사 비교시트 ──────────────────────────────────────────────────────
 // 캘린더 자리를 갈아치우는 "탭 전환" 방식은 장부와 동일 패턴을 그대로 따른다.
 // 데이터는 팀 공유가 필요 없는 개인 작업용 계산기라 Firestore 없이 localStorage에만 저장한다.
@@ -4499,7 +4995,7 @@ const AI_DEFAULT_WINDOW_SIZE = { width: 900, height: 760 };
 
 const memoPanel = document.getElementById('memo-panel');
 const aiPanel = document.getElementById('ai-panel');
-const VIEW_PANES = { calendar: appContentEl, memo: memoPanel, ai: aiPanel, chulgo: chulgoPanel, reminder: reminderPanel, compare: comparePanel };
+const VIEW_PANES = { calendar: appContentEl, memo: memoPanel, ai: aiPanel, chulgo: chulgoPanel, reminder: reminderPanel, compare: comparePanel, org: orgPanel };
 const VIEW_WINDOW_SIZE = {
   calendar: { key: CALENDAR_WINDOW_SIZE_KEY, default: null },
   memo: { key: MEMO_WINDOW_SIZE_KEY, default: MEMO_DEFAULT_WINDOW_SIZE },
@@ -4507,6 +5003,7 @@ const VIEW_WINDOW_SIZE = {
   chulgo: { key: CHULGO_WINDOW_SIZE_KEY, default: CHULGO_DEFAULT_WINDOW_SIZE },
   reminder: { key: REMINDER_WINDOW_SIZE_KEY, default: REMINDER_DEFAULT_WINDOW_SIZE },
   compare: { key: COMPARE_WINDOW_SIZE_KEY, default: COMPARE_DEFAULT_WINDOW_SIZE },
+  org: { key: ORG_WINDOW_SIZE_KEY, default: ORG_DEFAULT_WINDOW_SIZE },
 };
 let currentView = 'calendar';
 
@@ -4514,6 +5011,7 @@ async function switchView(name) {
   if (!VIEW_PANES[name] || name === currentView) return;
   if (name === 'chulgo') await initChulgoViewOnce();
   if (name === 'compare') renderCompareAll();
+  if (name === 'org') { await orgFetchMembers(); renderOrgChart(); }
 
   // 콘텐츠부터 즉시 바꾼다 — 창 크기 IPC 왕복(save/restore)이 끝나야만 화면이
   // 바뀌던 게 "전환이 느리다"는 체감의 주 원인이었다. 클래스 토글은 동기 작업이라

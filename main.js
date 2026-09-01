@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const { app, BrowserWindow, ipcMain, Notification, dialog, Tray, Menu, nativeImage, shell, screen } = require('electron');
 const Store = require('electron-store');
 const { autoUpdater } = require('electron-updater');
@@ -65,6 +65,26 @@ function loadConfig() {
 const { config, isPlaceholder } = loadConfig();
 const rootAdminEmails = (config.adminEmails || []).map((e) => e.toLowerCase());
 let dynamicAdminEmails = new Set();
+
+// --- 조직 관리 (본부/지점/팀/직급/시스템 권한) — 기존 admin(팀 일정 관리자)과는 완전히
+// 별도 개념. isAdmin/isRootAdmin은 그대로 두고, 이건 organization/team/position/permission을
+// 새로 다룬다. 7개 소속은 고정값이라 여기 한 곳에서만 정의하고 렌더러는 IPC로 받아간다. ---
+const ORGANIZATIONS = [
+  { key: '본사-1본부', label: '본사 1본부', type: 'hq' },
+  { key: '본사-2본부', label: '본사 2본부', type: 'hq' },
+  { key: '본사-3본부', label: '본사 3본부', type: 'hq' },
+  { key: '본사-4본부', label: '본사 4본부', type: 'hq' },
+  { key: '양주지점', label: '양주지점', type: 'branch' },
+  { key: '다산지점', label: '다산지점', type: 'branch' },
+  { key: '포천지점', label: '포천지점', type: 'branch' },
+];
+const ORG_POSITIONS_BY_TYPE = {
+  hq: ['주임', '대리', '과장', '차장', '팀장', '본부장'],
+  branch: ['주임', '대리', '과장', '차장', '팀장', '부지점장', '지점장'],
+};
+const ORG_PERMISSIONS = ['superAdmin', 'orgManager', 'teamManager', 'member'];
+let myOrgInfo = null; // 지금 로그인한 계정의 orgMembers 문서(내 소속/팀/직급/권한) — 서버 구독값이라 신뢰 가능
+let unsubscribeOrgMemberSelf = null;
 
 let mainWindow;
 let tray = null;
@@ -316,25 +336,58 @@ function handleMemosUpdate(memos) {
   broadcastMemos('memos:update', memos);
 }
 
-// --- 고객 리마인더 알림 — 등록할 때 지정한 날짜 오전 9시에 한 번 알려준다.
-// 메모 알람(위)과 같은 패턴: 아직 안 울린 것만 타이머를 걸고, 앱이 꺼져있던 동안
-// 지나버린 날짜는 켜지자마자 바로 한 번 울려서 놓치지 않는다. ---
+// --- 고객 리마인더 알림 정책 ---
+// - remindDate 당일: 오전 9시부터 자정 전까지 1시간마다 반복해서 알려준다. 완료 체크하면
+//   그 즉시(다음 반복 전에) 멈춘다. 앱을 9시 이후에 켰으면 켜지자마자 한 번 울리고
+//   그때부터 1시간 간격으로 이어간다.
+// - remindDate가 지나버린 뒤(기한 지남)까지 완료 처리를 안 했으면: 매번 켤 때마다 계속
+//   울리면 너무 시끄러우니, 그 뒤로는 앱을 켤 때 딱 한 번만 다시 알려준다(기한 지남
+//   섹션에 계속 남아있어서 화면으로는 계속 보임).
+// - 아직 먼 미래 날짜면: remindDate 당일 오전 9시가 될 때까지 기다린다. setTimeout은
+//   ms가 너무 크면(약 24.8일 이상) 즉시 발동하는 버그가 있어서, 하루 단위 청크로 나눠
+//   기다렸다가 다시 판단한다(리마인더는 몇 달 뒤가 흔해서 실제로 걸릴 수 있는 케이스).
+const REMINDER_REPEAT_MS = 60 * 60 * 1000;
+const REMINDER_MAX_CHUNK_MS = 24 * 60 * 60 * 1000;
+const reminderLatestById = new Map(); // id -> 최신 리마인더 객체 (반복 알림이 매 사이클 최신 상태를 보게)
 
-function reminderTargetMs(r) {
-  if (!r.remindDate || r.done || r.notified) return null;
-  const [y, m, d] = r.remindDate.split('-').map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d, 9, 0, 0, 0).getTime();
+function reminderLocalDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function fireReminderAlarm(r) {
   const title = r.car ? `${r.name} (${r.car})` : r.name;
   new Notification({ title: '📇 고객 상담 알림', body: `${title}${r.note ? ' — ' + r.note : ''}` }).show();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('reminders:alarm', r);
-  // 다시 안 울리게 알림 표식만 남긴다 — 리마인더 자체는 목록에 그대로 남는다(메모 알람과 동일한 정책).
-  firebaseClient
-    .updateReminder(firebaseHandle.db, r.id, { notified: true })
-    .catch((err) => console.error('리마인더 알림 처리 실패:', err));
+}
+
+function reminderTick(id) {
+  reminderAlarmTimers.delete(id);
+  const current = reminderLatestById.get(id);
+  if (!current || current.done || !current.remindDate) return;
+  const todayStr = reminderLocalDateStr(new Date());
+
+  if (current.remindDate === todayStr) {
+    fireReminderAlarm(current);
+    reminderAlarmTimers.set(id, setTimeout(() => reminderTick(id), REMINDER_REPEAT_MS));
+    return;
+  }
+
+  if (current.remindDate < todayStr) {
+    if (!current.notified) {
+      fireReminderAlarm(current);
+      firebaseClient
+        .updateReminder(firebaseHandle.db, current.id, { notified: true })
+        .catch((err) => console.error('리마인더 알림 처리 실패:', err));
+    }
+    return; // 기한이 지난 뒤엔 더 이상 타이머를 걸지 않는다 — 다음 앱 실행 때 다시 판단
+  }
+
+  // 아직 미래 — remindDate 당일 오전 9시까지 청크 단위로 기다렸다가 다시 확인한다.
+  const [y, m, d] = current.remindDate.split('-').map(Number);
+  const targetMs = new Date(y, m - 1, d, 9, 0, 0, 0).getTime();
+  const delay = Math.max(0, targetMs - Date.now());
+  const chunk = Math.min(delay, REMINDER_MAX_CHUNK_MS);
+  reminderAlarmTimers.set(id, setTimeout(() => reminderTick(id), chunk));
 }
 
 function handleRemindersUpdate(reminders) {
@@ -345,32 +398,17 @@ function handleRemindersUpdate(reminders) {
       reminderAlarmTimers.delete(id);
     }
   }
+  for (const id of reminderLatestById.keys()) {
+    if (!currentIds.has(id)) reminderLatestById.delete(id);
+  }
 
   reminders.forEach((r) => {
-    const targetMs = reminderTargetMs(r);
-    if (!targetMs || reminderAlarmTimers.has(r.id)) return;
-    const delay = targetMs - Date.now();
-    if (delay <= 0) {
-      fireReminderAlarm(r);
-      return;
-    }
-    // setTimeout은 ms가 너무 크면(약 24.8일 이상) 즉시 발동하는 버그가 있다 — 리마인더는
-    // 몇 달 뒤가 흔해서 실제로 걸릴 수 있는 케이스다. 하루 단위로 나눠서 다시 걸어준다.
-    const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
-    const scheduleChunked = (remaining) => {
-      const chunk = Math.min(remaining, MAX_TIMEOUT_MS);
-      const timer = setTimeout(() => {
-        const left = remaining - chunk;
-        if (left <= 0) {
-          reminderAlarmTimers.delete(r.id);
-          fireReminderAlarm(r);
-        } else {
-          scheduleChunked(left);
-        }
-      }, chunk);
-      reminderAlarmTimers.set(r.id, timer);
-    };
-    scheduleChunked(delay);
+    reminderLatestById.set(r.id, r);
+    if (r.done) return;
+    // 이미 타이머가 걸려있으면(반복 진행 중이거나 다음 날짜 대기 중) 다시 걸지 않는다 —
+    // reminderTick이 실행될 때마다 reminderLatestById에서 최신 상태를 읽어가므로,
+    // 스냅샷이 다시 올 때마다 재조정할 필요가 없다(중복 알림 방지).
+    if (!reminderAlarmTimers.has(r.id)) reminderTick(r.id);
   });
 
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('reminders:update', reminders);
@@ -395,7 +433,52 @@ function stopReminderSubscription() {
   }
   reminderAlarmTimers.forEach((timer) => clearTimeout(timer));
   reminderAlarmTimers.clear();
+  reminderLatestById.clear();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('reminders:update', []);
+}
+
+// --- 조직 관리: 내 소속/팀/직급/권한 구독 — 매번 최신 서버 값을 유지해서, 이 값을
+// 근거로 하는 모든 권한 체크(requireSuperAdmin 등)가 렌더러가 보낸 값이 아니라 항상
+// Firestore에 실제로 저장된 값을 본다(렌더러가 permission을 조작해서 보낼 수 없음). ---
+function startOrgMemberSelfSubscription(uid) {
+  firebaseClient.ensureOrgMemberRecord(firebaseHandle.db, firebaseHandle.auth.currentUser).catch((err) => {
+    console.error('조직 구성원 등록 실패:', err);
+  });
+  if (unsubscribeOrgMemberSelf) return;
+  unsubscribeOrgMemberSelf = firebaseClient.subscribeToOrgMemberSelf(
+    firebaseHandle.db,
+    uid,
+    (info) => {
+      myOrgInfo = info;
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('org:my-info-update', info);
+    },
+    (err) => console.error('내 조직정보 subscribe error:', err)
+  );
+}
+
+function stopOrgMemberSelfSubscription() {
+  if (unsubscribeOrgMemberSelf) {
+    unsubscribeOrgMemberSelf();
+    unsubscribeOrgMemberSelf = null;
+  }
+  myOrgInfo = null;
+}
+
+function requireSuperAdmin() {
+  if (!myOrgInfo || myOrgInfo.permission !== 'superAdmin') throw new Error('NOT_SUPER_ADMIN');
+}
+
+// 관리자가 실제로 조회 가능한 범위를 돌려준다 — 없으면 null(권한 없음, member 등).
+function myManagerScope() {
+  if (!myOrgInfo) return null;
+  if (myOrgInfo.permission === 'superAdmin') return { kind: 'super' };
+  if (myOrgInfo.permission === 'orgManager' && myOrgInfo.organization) {
+    return { kind: 'org', organization: myOrgInfo.organization };
+  }
+  if (myOrgInfo.permission === 'teamManager' && myOrgInfo.teamId) {
+    return { kind: 'team', teamId: myOrgInfo.teamId };
+  }
+  return null;
 }
 
 // --- Dynamic admin list realtime ---
@@ -658,6 +741,7 @@ function setupAuthStateListener() {
       startTeamEventsSubscription();
       startChulgoSubscription();
       startReminderSubscription();
+      startOrgMemberSelfSubscription(user.uid);
       reconcileTeamEventsForCurrentUser().catch((err) => console.error('팀 일정 재동기화 실패:', err));
     } else {
       stopMemosSubscription();
@@ -666,6 +750,7 @@ function setupAuthStateListener() {
       stopTeamEventStartDateBackfill();
       stopChulgoSubscription();
       stopReminderSubscription();
+      stopOrgMemberSelfSubscription();
     }
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('auth:updated', currentUserPayload());
   });
@@ -771,6 +856,12 @@ const CHANGELOG = {
   ],
   '0.36.2': [
     'AI 어시스턴트: "폴스타 견적기"처럼 동사 없이 파일명만 말해도 검색하도록 고쳤습니다 — 이전엔 검색을 안 해보고 "없는 파일"이라고 잘못 답하는 경우가 있었습니다',
+  ],
+  '0.37.0': [
+    '🆕 조직 관리 기능 추가 — 본사 1~4본부/양주·다산·포천지점 구조와 팀을 만들고, 계정마다 실제 이름/직급/소속/팀/권한을 배정할 수 있습니다(사이드바 "조직 관리", 최고관리자 전용)',
+    '🆕 본부장/지점장/팀장 계정은 사이드바에 "우리 조직"이 보이고, 담당 범위 직원들의 조직도와 이번 달 출고 장부(조회 전용)를 볼 수 있습니다',
+    '🆕 설정에서 "링크를 열 때 쓸 브라우저"를 직접 고를 수 있습니다(시스템 기본/Chrome/Edge/Whale/Firefox)',
+    '🆕 타이틀바 "본부시트" 버튼이 로그인한 계정의 소속에 맞는 시트로 열리도록 바뀌었습니다(최고관리자가 설정에서 본부/지점별 링크 지정)',
   ],
 };
 
@@ -1220,6 +1311,155 @@ ipcMain.handle('reminders:delete', async (_e, id) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireSignedInUser();
   await firebaseClient.deleteReminder(firebaseHandle.db, id);
+});
+
+// --- 조직 관리 IPC — 본부/지점/팀/직급/권한. 실제 권한 검증은 Firestore 규칙이 최종
+// 방어선이지만(클라이언트가 뭘 보내든 규칙을 못 뚫음), 여기서도 미리 막아서 렌더러에
+// 더 친절한 에러(NOT_SUPER_ADMIN 등)를 바로 돌려준다. ---
+
+ipcMain.handle('org:get-constants', () => ({
+  organizations: ORGANIZATIONS,
+  positionsByType: ORG_POSITIONS_BY_TYPE,
+  permissions: ORG_PERMISSIONS,
+}));
+
+ipcMain.handle('org:get-my-info', () => myOrgInfo);
+
+function orgTypeOf(organizationKey) {
+  const found = ORGANIZATIONS.find((o) => o.key === organizationKey);
+  return found ? found.type : null;
+}
+function orgLabelOf(organizationKey) {
+  const found = ORGANIZATIONS.find((o) => o.key === organizationKey);
+  return found ? found.label : organizationKey;
+}
+
+function getOrgTeamsOnce() {
+  return new Promise((resolve, reject) => {
+    const unsub = firebaseClient.subscribeToOrgTeams(
+      firebaseHandle.db,
+      (teams) => { unsub(); resolve(teams); },
+      (err) => { unsub(); reject(err); }
+    );
+  });
+}
+
+function getOrgHistoryOnce() {
+  return new Promise((resolve, reject) => {
+    const unsub = firebaseClient.subscribeToOrgHistory(
+      firebaseHandle.db,
+      (items) => { unsub(); resolve(items); },
+      (err) => { unsub(); reject(err); }
+    );
+  });
+}
+
+ipcMain.handle('org:get-members', async () => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSignedInUser();
+  const scope = myManagerScope();
+  if (!scope) throw new Error('NOT_AUTHORIZED');
+  if (scope.kind === 'super') return firebaseClient.getAllOrgMembers(firebaseHandle.db);
+  if (scope.kind === 'org') return firebaseClient.getOrgMembersByOrganization(firebaseHandle.db, scope.organization);
+  return firebaseClient.getOrgMembersByTeam(firebaseHandle.db, scope.teamId);
+});
+
+ipcMain.handle('org:upsert-member', async (_e, payload) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSuperAdmin();
+  const { uid, ...data } = payload;
+
+  if (data.permission && !ORG_PERMISSIONS.includes(data.permission)) throw new Error('INVALID_PERMISSION');
+  if (data.organization) {
+    const type = orgTypeOf(data.organization);
+    if (!type) throw new Error('INVALID_ORGANIZATION');
+    if (data.position && !ORG_POSITIONS_BY_TYPE[type].includes(data.position)) throw new Error('INVALID_POSITION');
+  }
+
+  const before = (await firebaseClient.getAllOrgMembers(firebaseHandle.db)).find((m) => m.uid === uid) || null;
+  await firebaseClient.updateOrgMember(firebaseHandle.db, uid, data);
+  await firebaseClient.addOrgHistory(firebaseHandle.db, {
+    type: 'member_update',
+    targetUid: uid,
+    before: before ? { organization: before.organization, teamId: before.teamId, position: before.position, permission: before.permission, active: before.active } : null,
+    after: { organization: data.organization, teamId: data.teamId, position: data.position, permission: data.permission, active: data.active },
+    byUid: firebaseHandle.auth.currentUser.uid,
+  });
+});
+
+ipcMain.handle('org:get-teams', async () => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSignedInUser();
+  return getOrgTeamsOnce();
+});
+
+ipcMain.handle('org:create-team', async (_e, data) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSuperAdmin();
+  const id = await firebaseClient.createOrgTeam(firebaseHandle.db, data);
+  await firebaseClient.addOrgHistory(firebaseHandle.db, {
+    type: 'team_create', teamId: id, organization: data.organization, teamName: data.teamName,
+    byUid: firebaseHandle.auth.currentUser.uid,
+  });
+  return id;
+});
+
+ipcMain.handle('org:update-team', async (_e, { id, ...data }) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSuperAdmin();
+  await firebaseClient.updateOrgTeam(firebaseHandle.db, id, data);
+  await firebaseClient.addOrgHistory(firebaseHandle.db, {
+    type: 'team_update', teamId: id, changes: data, byUid: firebaseHandle.auth.currentUser.uid,
+  });
+});
+
+ipcMain.handle('org:delete-team', async (_e, id) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSuperAdmin();
+  const members = await firebaseClient.getOrgMembersByTeam(firebaseHandle.db, id);
+  if (members.length) throw new Error('TEAM_HAS_MEMBERS');
+  await firebaseClient.deleteOrgTeam(firebaseHandle.db, id);
+  await firebaseClient.addOrgHistory(firebaseHandle.db, {
+    type: 'team_delete', teamId: id, byUid: firebaseHandle.auth.currentUser.uid,
+  });
+});
+
+ipcMain.handle('org:get-history', async () => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSuperAdmin();
+  return getOrgHistoryOnce();
+});
+
+ipcMain.handle('org:get-branch-links', async () => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSignedInUser();
+  return firebaseClient.getBranchLinks(firebaseHandle.db);
+});
+
+ipcMain.handle('org:set-branch-links', async (_e, links) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSuperAdmin();
+  await firebaseClient.setBranchLinks(firebaseHandle.db, links);
+  await firebaseClient.addOrgHistory(firebaseHandle.db, {
+    type: 'branch_links_update', byUid: firebaseHandle.auth.currentUser.uid,
+  });
+});
+
+// 관리자 전용 "조직 장부" 조회 — 완전 읽기 전용(생성/수정/삭제 IPC 없음).
+ipcMain.handle('org:get-ledger-for-scope', async (_e, { month }) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSignedInUser();
+  const scope = myManagerScope();
+  if (!scope) throw new Error('NOT_AUTHORIZED');
+
+  let members;
+  if (scope.kind === 'super') members = await firebaseClient.getAllOrgMembers(firebaseHandle.db);
+  else if (scope.kind === 'org') members = await firebaseClient.getOrgMembersByOrganization(firebaseHandle.db, scope.organization);
+  else members = await firebaseClient.getOrgMembersByTeam(firebaseHandle.db, scope.teamId);
+
+  const uids = members.map((m) => m.uid);
+  const entries = await firebaseClient.getChulgoEntriesForAuthors(firebaseHandle.db, uids, month);
+  return { members, entries };
 });
 
 // 실제 회사 엑셀 템플릿을 그대로 로드해서 값만 채워넣는다 — 새로 스타일을 만들지
@@ -1757,34 +1997,95 @@ const WEB_SEARCH_ENGINES = {
   youtube: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
 };
 
+// --- 링크를 열 때 쓸 브라우저 — 각자 앱 설정에서 고를 수 있다(엣지/크롬 등, 안 고르면
+// 시스템 기본). Electron이 기본 제공하는 방법은 없어서, Windows 레지스트리의 App Paths
+// 항목으로 실제 설치 경로를 찾아 그 실행파일로 직접 연다. 못 찾으면 조용히 시스템
+// 기본 브라우저로 대신 연다(에러로 막지 않음). ---
+const PREFERRED_BROWSER_KEY = 'preferredBrowser';
+const PREFERRED_BROWSER_OPTIONS = ['system', 'chrome', 'edge', 'whale', 'firefox'];
+const BROWSER_EXE_NAMES = { chrome: 'chrome.exe', edge: 'msedge.exe', whale: 'whale.exe', firefox: 'firefox.exe' };
+const browserExePathCache = new Map();
+
+function queryRegAppPath(hive, exeName) {
+  return new Promise((resolve) => {
+    const regPath = `${hive}\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\${exeName}`;
+    execFile('reg', ['query', regPath, '/ve'], (err, stdout) => {
+      if (err) { resolve(null); return; }
+      const m = String(stdout).match(/REG_SZ\s+(.+)/);
+      resolve(m ? m[1].trim() : null);
+    });
+  });
+}
+
+async function resolveBrowserExePath(browserKey) {
+  const exeName = BROWSER_EXE_NAMES[browserKey];
+  if (!exeName) return null;
+  if (browserExePathCache.has(exeName)) return browserExePathCache.get(exeName);
+  const found = (await queryRegAppPath('HKLM', exeName)) || (await queryRegAppPath('HKCU', exeName));
+  browserExePathCache.set(exeName, found);
+  return found;
+}
+
+async function openExternalWithPreferredBrowser(url) {
+  const pref = settingsStore.get(PREFERRED_BROWSER_KEY) || 'system';
+  if (pref === 'system') { await shell.openExternal(url); return; }
+  const exePath = await resolveBrowserExePath(pref);
+  if (!exePath) { await shell.openExternal(url); return; }
+  spawn(exePath, [url], { detached: true, stdio: 'ignore' }).unref();
+}
+
+ipcMain.handle('settings:get-preferred-browser', () => settingsStore.get(PREFERRED_BROWSER_KEY) || 'system');
+ipcMain.handle('settings:set-preferred-browser', (_e, value) => {
+  if (!PREFERRED_BROWSER_OPTIONS.includes(value)) throw new Error('INVALID_BROWSER');
+  settingsStore.set(PREFERRED_BROWSER_KEY, value);
+});
+
 ipcMain.handle('web:search', async (_e, { query, engine } = {}) => {
   const q = String(query || '').trim();
   if (!q) throw new Error('검색어가 비어 있습니다.');
   const build = WEB_SEARCH_ENGINES[engine] || WEB_SEARCH_ENGINES.naver;
   const url = build(q);
   // 우리가 만든 검색 URL 만 연다 — 임의의 주소를 열어주는 통로가 되면 안 된다.
-  await shell.openExternal(url);
+  await openExternalWithPreferredBrowser(url);
   return { ok: true, url };
 });
 
 // --- 제목표시줄 바로가기 ---
 // 자주 쓰는 사내 사이트를 클릭 한 번으로 열게. 목록을 여기(메인 프로세스)에 고정해두고
 // id로만 요청받는다 — 렌더러가 임의 URL을 열게 하는 통로를 만들지 않기 위해서다.
+// "sheet3"만 특별 취급한다 — 로그인한 계정의 소속(orgMembers.organization)에 맞는
+// 본부/지점 시트로 동적으로 바뀐다(settings/branchLinks). 아직 소속 배정이 안 됐거나
+// 링크가 설정 안 됐으면 기존 3본부 시트로 조용히 대체한다(기존 사용자 경험 유지).
+const LEGACY_BRANCH_SHEET_FALLBACK_URL = 'https://docs.google.com/spreadsheets/d/1Idpf57f6UpJAs4VjQdYafMQizJmBSq29l_ElkeFDh4g/edit?gid=784207234#gid=784207234';
 const TITLEBAR_SHORTCUTS = [
   { id: 'admin', label: '어드민', url: 'https://admin.a1auto.io/' },
-  { id: 'sheet3', label: '3본부시트', url: 'https://docs.google.com/spreadsheets/d/1Idpf57f6UpJAs4VjQdYafMQizJmBSq29l_ElkeFDh4g/edit?gid=784207234#gid=784207234' },
+  { id: 'sheet3', label: '3본부시트', url: LEGACY_BRANCH_SHEET_FALLBACK_URL },
   { id: 'kapan', label: '카판', url: 'http://www.a1autocar.com/desk' },
   { id: 'cafe', label: '에이원카페', url: 'https://cafe.naver.com/a1autocarinformation' },
 ];
 
 ipcMain.handle('shortcuts:get-list', () => {
-  return TITLEBAR_SHORTCUTS.map(({ id, label }) => ({ id, label }));
+  return TITLEBAR_SHORTCUTS.map(({ id, label }) => {
+    if (id === 'sheet3' && myOrgInfo && myOrgInfo.organization) {
+      return { id, label: `${orgLabelOf(myOrgInfo.organization)} 시트` };
+    }
+    return { id, label };
+  });
 });
 
 ipcMain.handle('shortcuts:open', async (_e, { id } = {}) => {
   const item = TITLEBAR_SHORTCUTS.find((s) => s.id === id);
   if (!item) throw new Error('등록되지 않은 바로가기입니다.');
-  await shell.openExternal(item.url);
+  let url = item.url;
+  if (id === 'sheet3' && myOrgInfo && myOrgInfo.organization && firebaseHandle) {
+    try {
+      const links = await firebaseClient.getBranchLinks(firebaseHandle.db);
+      if (links[myOrgInfo.organization]) url = links[myOrgInfo.organization];
+    } catch (err) {
+      console.error('본부/지점 시트 링크 조회 실패:', err);
+    }
+  }
+  await openExternalWithPreferredBrowser(url);
   return { ok: true };
 });
 

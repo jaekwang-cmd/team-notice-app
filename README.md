@@ -22,6 +22,19 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // --- 조직 관리(본부/지점/팀/직급/권한)에서 쓰는 헬퍼 — 요청자 본인의 orgMembers
+    // 문서를 찾아 소속/팀/권한을 읽는다. 본인 문서가 없을 수도 있는 상황(신규 로그인
+    // 직후 등)에서도 규칙 평가 자체가 에러로 죽지 않도록 exists()로 먼저 확인한다.
+    function myOrgExists() {
+      return exists(/databases/$(database)/documents/orgMembers/$(request.auth.uid));
+    }
+    function myOrgDoc() {
+      return get(/databases/$(database)/documents/orgMembers/$(request.auth.uid)).data;
+    }
+    function myPermission() {
+      return myOrgExists() ? myOrgDoc().permission : 'member';
+    }
+
     // 개인 메모: 본인이 쓴 문서만 읽기/쓰기 가능 (다른 팀원에게 공유되지 않음)
     match /memos/{docId} {
       allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
@@ -30,12 +43,27 @@ service cloud.firestore {
     match /teamEvents/{docId} {
       allow read, write: if request.auth != null;
     }
+    // settings/branchLinks(본부·지점별 시트 링크)도 여기 포함 — 앱이 IPC 단계에서
+    // superAdmin만 쓰도록 막는다(관리자 목록/기타 설정도 기존부터 같은 방식).
     match /settings/{docId} {
       allow read, write: if request.auth != null;
     }
-    // 출고 관리 장부: 본인이 쓴 문서만 읽기/쓰기 가능 (다른 팀원 데이터는 안 보임)
+    // 출고 관리 장부: 본인은 항상 전체 권한. 그 외엔 "이 항목을 쓴 사람의 현재 조직
+    // 배정"을 기준으로 같은 본부/지점의 orgManager, 같은 팀의 teamManager, 그리고
+    // superAdmin에게 읽기만 허용한다(수정/삭제는 절대 불가) — 사람이 다른 본부로
+    // 옮기면 그 즉시 예전 관리자는 못 보고 새 관리자가 과거 기록까지 보게 된다.
     match /chulgoEntries/{docId} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.authorUid ||
+        myPermission() == 'superAdmin' ||
+        (myPermission() == 'orgManager' &&
+          exists(/databases/$(database)/documents/orgMembers/$(resource.data.authorUid)) &&
+          get(/databases/$(database)/documents/orgMembers/$(resource.data.authorUid)).data.organization == myOrgDoc().organization) ||
+        (myPermission() == 'teamManager' && myOrgDoc().teamId != null &&
+          exists(/databases/$(database)/documents/orgMembers/$(resource.data.authorUid)) &&
+          get(/databases/$(database)/documents/orgMembers/$(resource.data.authorUid)).data.teamId == myOrgDoc().teamId)
+      );
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid;
     }
     // 고객 리마인더: 본인이 쓴 문서만 읽기/쓰기 가능 (다른 팀원 데이터는 안 보임)
@@ -43,9 +71,46 @@ service cloud.firestore {
       allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid;
     }
+
+    // 조직 구성원 — 최초 로그인 시 본인이 "존재 등록"만 가능(permission은 무조건
+    // member로 강제, 스스로 승격 불가). 그 이후 조직/팀/직급/권한 변경은 superAdmin만.
+    // 읽기는 본인 문서 + 같은 소속 사람끼리 + superAdmin 전체.
+    match /orgMembers/{uid} {
+      allow read: if request.auth != null && (
+        request.auth.uid == uid ||
+        myPermission() == 'superAdmin' ||
+        myOrgDoc().organization == resource.data.organization
+      );
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.permission == 'member'
+        && request.resource.data.organization == null
+        && request.resource.data.teamId == null
+        && request.resource.data.active == true;
+      allow update: if request.auth != null && myPermission() == 'superAdmin';
+      allow delete: if false;
+    }
+    // 팀 — 이름/담당자 등은 민감정보가 아니라 로그인한 사람 전체가 읽을 수 있게 두고,
+    // 쓰기(생성/수정/삭제)만 superAdmin 전용으로 막는다.
+    match /orgTeams/{teamId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && myPermission() == 'superAdmin';
+    }
+    // 인사이동/변경 로그 — superAdmin만 읽고 쓸 수 있다. 수정/삭제는 아예 막아서
+    // 로그가 사후에 조작되지 않게 한다.
+    match /orgHistory/{id} {
+      allow read, create: if request.auth != null && myPermission() == 'superAdmin';
+      allow update, delete: if false;
+    }
   }
 }
 ```
+
+**최초 1회, superAdmin(최고관리자) 직접 지정 필요**: 위 규칙상 앱 안에서는 아무도 스스로
+superAdmin이 될 수 없다(의도된 설계 — 권한 상승 공격 방지). 조직 관리 기능을 처음 쓰기
+전에, 최고관리자가 될 계정으로 앱에 한 번 로그인한 뒤(그러면 `orgMembers` 컬렉션에
+`permission: "member"`로 본인 문서가 자동 생성됨) **Firestore 콘솔 → orgMembers 컬렉션 →
+본인 이메일로 된 문서를 찾아 `permission` 필드 값을 직접 `superAdmin`으로 수정**해야 한다.
 
 ### Google Calendar 연동용 OAuth 클라이언트 만들기
 1. https://console.cloud.google.com 에서 프로젝트 생성 (Firebase와 같은 프로젝트 사용)
