@@ -3853,6 +3853,56 @@ table.chulgo-ledger tbody tr {
   transform: translateX(-50%) translateY(0);
 }
 
+/* 강제 업데이트 차단 화면 — 토스트(9999)보다도 위, 이 밑에 아무것도 클릭 못 하게 */
+.force-update-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 16, 0.88);
+  backdrop-filter: blur(6px);
+}
+.force-update-card {
+  background: var(--color-panel-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 16px);
+  padding: 32px 36px;
+  max-width: 380px;
+  text-align: center;
+  box-shadow: var(--shadow-card);
+}
+.force-update-card h2 {
+  margin: 0 0 10px;
+  font-size: 19px;
+  color: var(--color-text-primary);
+}
+.force-update-card p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+.force-update-versions {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+#force-update-btn {
+  margin-top: 14px;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 700;
+  background: var(--color-accent);
+  color: var(--color-button-text);
+  cursor: pointer;
+}
+#force-update-btn:hover {
+  filter: brightness(1.08);
+}
+
 /* AI 채팅 안의 "내 PC 파일 찾기" 결과 목록 (클릭하면 열림) */
 .ai-file-results {
   align-self: stretch;

@@ -1318,6 +1318,7 @@ document.getElementById('btn-settings').onclick = async () => {
   autostartToggle.checked = await window.api.getAutostart();
   preferredBrowserSelect.value = await window.api.getPreferredBrowser();
   orgRenderBranchLinksEditor();
+  orgRenderMinVersionEditor();
   const theme = await window.api.getTheme();
   lastSavedTheme = theme;
   fillThemeInputs(theme);
@@ -2010,6 +2011,17 @@ window.addEventListener('unhandledrejection', (ev) => {
 window.addEventListener('error', (ev) => {
   console.error('처리되지 않은 오류:', ev.error || ev.message);
   showToast('예상치 못한 오류가 발생했습니다. 다시 시도해주세요.');
+});
+
+// 강제 업데이트 — 닫을 방법이 없다(의도된 동작), "지금 업데이트"는 타이틀바 버전
+// 배지랑 완전히 같은, 이미 검증된 업데이트 흐름을 그대로 재사용한다.
+window.api.onForceUpdateRequired(({ minVersion, currentVersion }) => {
+  document.getElementById('force-update-current').textContent = `v${currentVersion}`;
+  document.getElementById('force-update-min').textContent = `v${minVersion}`;
+  document.getElementById('force-update-overlay').classList.remove('hidden');
+});
+document.getElementById('force-update-btn').addEventListener('click', () => {
+  document.getElementById('app-version-badge').click();
 });
 
 async function chulgoUpdateField(id, key, value) {
@@ -4246,6 +4258,7 @@ function orgApplyMyInfo(info) {
   const scope = info && ['superAdmin', 'orgManager', 'teamManager'].includes(info.permission) ? info.permission : null;
   orgNavBtn.classList.toggle('hidden', !scope);
   document.getElementById('org-branch-links-section').classList.toggle('hidden', info?.permission !== 'superAdmin');
+  document.getElementById('min-version-section').classList.toggle('hidden', info?.permission !== 'superAdmin');
   if (!scope) return;
   orgNavLabel.textContent = scope === 'superAdmin' ? '조직 관리' : '우리 조직';
   orgPanelTitle.textContent = scope === 'superAdmin' ? '조직 관리' : '우리 조직';
@@ -4274,6 +4287,27 @@ async function orgRenderBranchLinksEditor() {
     console.error('본부/지점 시트 링크 불러오기 실패:', err);
   }
 }
+
+async function orgRenderMinVersionEditor() {
+  const section = document.getElementById('min-version-section');
+  if (section.classList.contains('hidden')) return;
+  try {
+    const cfg = await window.api.getMinVersionConfig();
+    document.getElementById('min-version-input').value = cfg?.minVersion || '';
+  } catch (err) {
+    console.error('최소 버전 불러오기 실패:', err);
+  }
+}
+
+document.getElementById('min-version-save').addEventListener('click', async () => {
+  const value = document.getElementById('min-version-input').value.trim();
+  try {
+    await window.api.setMinVersion(value);
+    showToast('최소 버전이 저장되었습니다.');
+  } catch (err) {
+    showToast(err.message === 'INVALID_VERSION' ? '버전 형식이 올바르지 않아요 (예: 0.37.3)' : chulgoFriendlyError(err));
+  }
+});
 
 document.getElementById('org-branch-links-save').addEventListener('click', async () => {
   const links = {};

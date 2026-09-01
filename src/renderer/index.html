@@ -24,6 +24,17 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- 강제 업데이트 차단 화면 — 닫기 버튼 없음, "지금 업데이트"만 누를 수 있다.
+       평소엔 hidden, main 프로세스가 최소 버전보다 낮다고 판단하면 보인다. -->
+  <div id="force-update-overlay" class="force-update-overlay hidden">
+    <div class="force-update-card">
+      <h2>⬆ 업데이트가 필요합니다</h2>
+      <p>새 버전이 나와서 계속 쓰려면 업데이트가 필요해요.</p>
+      <p class="force-update-versions">현재 <span id="force-update-current"></span> → 필요 <span id="force-update-min"></span></p>
+      <button type="button" id="force-update-btn">지금 업데이트</button>
+    </div>
+  </div>
+
   <div class="app-bg">
     <nav class="app-sidebar" id="app-sidebar">
       <button class="sidebar-nav-btn active" data-view="calendar" title="캘린더">
@@ -515,6 +526,16 @@
         <p class="field-label">타이틀바 "본부시트" 버튼이 각자 소속에 맞는 링크로 열립니다.</p>
         <div id="org-branch-links-list" class="org-branch-links-list"></div>
         <button id="org-branch-links-save" class="theme-reset-btn">시트 링크 저장</button>
+      </div>
+
+      <div id="min-version-section" class="hidden">
+        <h3 class="theme-section-title">강제 업데이트</h3>
+        <p class="field-label">여기 적은 버전보다 낮으면, 그 계정은(재광님 포함) 업데이트 전까지 앱을 못 씁니다.</p>
+        <div class="theme-row">
+          <span>최소 버전</span>
+          <input type="text" id="min-version-input" placeholder="예: 0.37.3" style="max-width:140px">
+        </div>
+        <button id="min-version-save" class="theme-reset-btn">최소 버전 저장</button>
       </div>
 
       <h3 class="theme-section-title">계정</h3>

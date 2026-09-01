@@ -502,6 +502,25 @@ function stopFinanceCredentialsSubscription() {
   financeCredentialsOrg = null;
 }
 
+// --- 강제 업데이트 — superAdmin이 설정에서 지정한 최소 버전보다 낮으면 렌더러에
+// 알려서 화면을 막게 한다. Firestore를 못 읽으면(오프라인 등) 그냥 조용히 넘어간다 —
+// 이 체크 때문에 앱이 아예 안 켜지는 일은 없어야 한다(fail-open). ---
+async function checkForcedUpdate() {
+  if (!firebaseHandle) return;
+  try {
+    const cfg = await firebaseClient.getAppConfig(firebaseHandle.db);
+    const minVersion = cfg && cfg.minVersion;
+    const currentVersion = app.getVersion();
+    if (minVersion && compareVersions(currentVersion, minVersion) < 0) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('app:force-update-required', { minVersion, currentVersion });
+      }
+    }
+  } catch (err) {
+    console.error('최소 버전 확인 실패:', err);
+  }
+}
+
 function requireSuperAdmin() {
   if (!myOrgInfo || myOrgInfo.permission !== 'superAdmin') throw new Error('NOT_SUPER_ADMIN');
 }
@@ -780,6 +799,7 @@ function setupAuthStateListener() {
       startChulgoSubscription();
       startReminderSubscription();
       startOrgMemberSelfSubscription(user.uid);
+      checkForcedUpdate();
       reconcileTeamEventsForCurrentUser().catch((err) => console.error('팀 일정 재동기화 실패:', err));
     } else {
       stopMemosSubscription();
@@ -912,6 +932,9 @@ const CHANGELOG = {
   '0.37.3': [
     '안정화 점검 — 조직 관리/설정 화면에서 데이터를 못 불러왔을 때 "예상치 못한 오류" 토스트만 뜨고 원인을 알 수 없던 부분을 고쳤습니다',
     '긴 이메일/이름이 조직도 카드 밖으로 넘칠 수 있던 부분을 고쳤습니다',
+  ],
+  '0.38.0': [
+    '🆕 강제 업데이트 — 설정에서 최고관리자가 "최소 버전"을 지정하면, 그보다 낮은 버전은(재광님 포함 예외 없이) 업데이트 전까지 앱을 쓸 수 없습니다',
   ],
 };
 
@@ -1537,6 +1560,21 @@ ipcMain.handle('finance:delete', async (_e, id) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireSignedInUser();
   await firebaseClient.deleteFinanceCredential(firebaseHandle.db, id);
+});
+
+// --- 강제 업데이트 최소 버전 설정 (superAdmin 전용) ---
+ipcMain.handle('app:get-min-version-config', async () => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSignedInUser();
+  return firebaseClient.getAppConfig(firebaseHandle.db);
+});
+
+ipcMain.handle('app:set-min-version', async (_e, minVersion) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSuperAdmin();
+  const clean = String(minVersion || '').trim();
+  if (!/^\d+\.\d+\.\d+$/.test(clean)) throw new Error('INVALID_VERSION');
+  await firebaseClient.setAppConfig(firebaseHandle.db, { minVersion: clean });
 });
 
 // 실제 회사 엑셀 템플릿을 그대로 로드해서 값만 채워넣는다 — 새로 스타일을 만들지

@@ -102,6 +102,12 @@ contextBridge.exposeInMainWorld('api', {
   onFinanceUpdate: (callback) => {
     ipcRenderer.on('finance:update', (_event, items) => callback(items));
   },
+
+  getMinVersionConfig: () => ipcRenderer.invoke('app:get-min-version-config'),
+  setMinVersion: (minVersion) => ipcRenderer.invoke('app:set-min-version', minVersion),
+  onForceUpdateRequired: (callback) => {
+    ipcRenderer.on('app:force-update-required', (_event, payload) => callback(payload));
+  },
   aiFillChulgo: (payload) => ipcRenderer.invoke('chulgo:ai-fill', payload),
   aiChat: (payload) => ipcRenderer.invoke('ai:chat', payload),
 

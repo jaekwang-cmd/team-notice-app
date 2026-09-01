@@ -511,6 +511,17 @@ async function deleteFinanceCredential(db, id) {
   await deleteDoc(doc(db, 'financeCredentials', id));
 }
 
+// --- 앱 강제 업데이트 — settings/appConfig 문서 하나에 최소 버전만 저장 ---
+
+async function getAppConfig(db) {
+  const snap = await getDoc(doc(db, 'settings', 'appConfig'));
+  return snap.exists() ? snap.data() : {};
+}
+
+async function setAppConfig(db, data) {
+  await setDoc(doc(db, 'settings', 'appConfig'), data, { merge: true });
+}
+
 module.exports = {
   initFirebase,
   signInWithGoogleIdToken,
@@ -552,4 +563,6 @@ module.exports = {
   createFinanceCredential,
   updateFinanceCredential,
   deleteFinanceCredential,
+  getAppConfig,
+  setAppConfig,
 };
