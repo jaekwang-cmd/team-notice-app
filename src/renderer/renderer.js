@@ -4347,8 +4347,10 @@ function renderOrgChart() {
     teamsRow.className = 'org-teams-row';
     orgTeamsHere.forEach((team) => {
       const teamMembers = orgMembers.filter((m) => m.teamId === team.id);
-      const manager = teamMembers.find((m) => m.uid === team.teamManagerUid);
-      const others = teamMembers.filter((m) => m.uid !== team.teamManagerUid);
+      // 본부장/지점장과 같은 방식 — 별도 teamManagerUid 필드에 기대지 않고, 그냥 그
+      // 팀 안에서 직급이 "팀장"인 사람을 찾는다(그 필드를 채워주는 화면이 없었음).
+      const manager = teamMembers.find((m) => m.position === '팀장');
+      const others = teamMembers.filter((m) => m !== manager);
 
       const card = document.createElement('div');
       card.className = 'org-team-card';
@@ -4582,14 +4584,30 @@ async function renderOrgLedger() {
   if (!orgLedgerMonthInput.value) orgLedgerMonthInput.value = orgCurrentLedgerMonth();
   const month = orgCurrentLedgerMonth();
   orgLedgerWrap.innerHTML = '<div class="chulgo-mini-hint">불러오는 중...</div>';
-  let data;
   try {
-    data = await window.api.getOrgLedgerForScope({ month });
+    await renderOrgLedgerInner(month);
   } catch (err) {
+    console.error('조직 장부 표시 실패:', err);
     orgLedgerWrap.innerHTML = `<div class="chulgo-mini-hint">${escapeHtml(chulgoFriendlyError(err))}</div>`;
-    return;
   }
+}
 
+// chulgoComputedFee(e)는 "지금 로그인한 나"의 직급(chulgoPosition 전역값)을 쓰기 때문에
+// 조직 장부(다른 사람들 것)에는 못 쓴다 — 계산식 자체(chulgoComputedFee 본문)는 그대로,
+// 직급만 각 멤버 것으로 바꿔서 여기서 따로 계산한다.
+function orgComputedFeeFor(e, position) {
+  const base =
+    (Number(e.fee) || 0) + (Number(e.promo) || 0) + (Number(e.agencyFee) || 0) + chulgoExtraFeeAmountTotal(e)
+    - (Number(e.supplies) || 0) - chulgoPaybackTotal(e);
+  const rate = CHULGO_POSITION_RATES[position] ?? 0.5;
+  return base * 0.867 * rate;
+}
+
+// 실제 렌더링은 여기서 — 화면을 그리다 생기는 예외까지 위 renderOrgLedger의 try가
+// 전부 감싸서, 전역 안전망 토스트("예상치 못한 오류...") 대신 이 패널 안에 이유가
+// 뜨게 한다.
+async function renderOrgLedgerInner(month) {
+  const data = await window.api.getOrgLedgerForScope({ month });
   const { members, entries } = data;
   const teamsById = new Map(orgTeamsCache.map((t) => [t.id, t]));
   const entriesByAuthor = new Map();
@@ -4620,7 +4638,7 @@ async function renderOrgLedger() {
 
     teamMembers.forEach((m) => {
       const myEntries = entriesByAuthor.get(m.uid) || [];
-      const feeSum = myEntries.reduce((a, e) => a + window.ChulgoCalc.chulgoComputedFee(e, m.position), 0);
+      const feeSum = myEntries.reduce((a, e) => a + orgComputedFeeFor(e, m.position), 0);
       totalCount += myEntries.length;
       totalFee += feeSum;
 

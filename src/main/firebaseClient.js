@@ -458,15 +458,16 @@ async function getChulgoEntriesForAuthors(db, uids, month) {
   const chunks = [];
   for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
 
+  // authorUid('in') + month('==')를 같이 걸면 Firestore 복합 색인이 별도로 필요해서
+  // (콘솔에서 색인을 미리 만들어두지 않으면 조회 자체가 실패한다), authorUid만으로
+  // 걸러 받고 month는 여기서 필터링한다 — 색인 설정 없이 그냥 동작하게.
   const results = await Promise.all(
     chunks.map(async (chunk) => {
-      const q = query(
-        collection(db, 'chulgoEntries'),
-        where('authorUid', 'in', chunk),
-        where('month', '==', month)
-      );
+      const q = query(collection(db, 'chulgoEntries'), where('authorUid', 'in', chunk));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      return snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((e) => e.month === month);
     })
   );
   return results.flat();
