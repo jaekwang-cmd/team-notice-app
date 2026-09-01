@@ -4231,6 +4231,7 @@ async function orgLoadConstantsOnce() {
 // (예: 재광님이 다른 사람을 superAdmin으로 바꿈) 실시간으로 즉시 반영된다.
 function orgApplyMyInfo(info) {
   myOrgInfo = info;
+  financeNavBtn.classList.toggle('hidden', !(info && info.organization));
   const scope = info && ['superAdmin', 'orgManager', 'teamManager'].includes(info.permission) ? info.permission : null;
   orgNavBtn.classList.toggle('hidden', !scope);
   document.getElementById('org-branch-links-section').classList.toggle('hidden', info?.permission !== 'superAdmin');
@@ -4369,6 +4370,26 @@ function renderOrgChart() {
     block.appendChild(teamsRow);
     orgListWrap.appendChild(block);
   });
+
+  // 미배정 계정 — 이 앱에 로그인은 했지만 아직 본부/지점을 안 정한 사람들. 여기서
+  // 클릭하면 바로 배정 화면이 뜬다("+ 직원"으로 새 계정을 만들 수는 없고, 이렇게
+  // 이미 로그인해본 계정 중에서 고르는 방식).
+  if (canEdit) {
+    const unassigned = visibleMembers.filter((m) => !m.organization);
+    if (unassigned.length) {
+      anyShown = true;
+      const block = document.createElement('div');
+      block.className = 'org-unit-block';
+      block.id = 'org-unassigned-block';
+      block.innerHTML = `<div class="org-unit-head"><span class="org-unit-title">🟡 미배정 계정 (${unassigned.length})</span></div>
+        <div class="org-team-card" style="max-width:none"><div class="org-team-members"></div></div>`;
+      const membersWrap = block.querySelector('.org-team-members');
+      unassigned.forEach((m) => {
+        membersWrap.insertAdjacentHTML('beforeend', orgMemberCardHTML(m));
+      });
+      orgListWrap.appendChild(block);
+    }
+  }
 
   orgEmpty.style.display = anyShown ? 'none' : 'block';
 }
@@ -4521,7 +4542,12 @@ document.getElementById('org-team-delete').addEventListener('click', async () =>
 });
 
 orgAddMemberBtn.addEventListener('click', () => {
-  showToast('신규 계정 배정은 "이미 한 번 로그인한 계정"만 가능해요 — 목록에서 직원 카드를 눌러 배정해주세요.');
+  const block = document.getElementById('org-unassigned-block');
+  if (block) {
+    block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    showToast('아직 미배정 계정이 없어요 — 배정할 사람이 한 번 로그인하면 여기 목록에 나타나요.');
+  }
 });
 
 orgSearchInput.addEventListener('input', () => {
@@ -4650,6 +4676,132 @@ function orgHistoryLine(h) {
   if (h.type === 'branch_links_update') return `본부/지점 시트 링크 설정 변경`;
   return h.type || '변경';
 }
+
+// ─── 계정 메모 (상호명/ID/PW, 같은 소속끼리만 공유) ──────────────────────────
+// 재광님 확인: 마스킹/펼치기 없이 목록에서 바로 다 보여준다. 암호화는 아직 없음(평문) —
+// 대신 Firestore 규칙으로 "같은 소속" 사람만 읽을 수 있게 좁혀뒀다.
+const financePanel = document.getElementById('finance-panel');
+const financeNavBtn = document.getElementById('finance-nav-btn');
+const financeOrgLabel = document.getElementById('finance-org-label');
+const financeListWrap = document.getElementById('finance-list-wrap');
+const financeEmpty = document.getElementById('finance-empty');
+const financeSearchInput = document.getElementById('finance-search');
+const FINANCE_WINDOW_SIZE_KEY = 'finance_window_size_v1';
+const FINANCE_DEFAULT_WINDOW_SIZE = { width: 1100, height: 800 };
+
+let financeCredentials = [];
+let financeSearchQuery = '';
+let financeEditingId = null;
+
+function financeMatchesSearch(f) {
+  if (!financeSearchQuery) return true;
+  return (f.siteName || '').toLowerCase().includes(financeSearchQuery);
+}
+
+function financeCardHTML(f) {
+  const canEdit = myOrgInfo && (myOrgInfo.uid === f.authorUid || myOrgInfo.permission === 'superAdmin');
+  return `
+    <div class="finance-card-item" data-id="${f.id}">
+      <div class="finance-card-head">
+        <strong>${escapeHtml(f.siteName || '(이름 없음)')}</strong>
+        <span class="finance-card-author">${escapeHtml(f.authorName || '')}</span>
+        <div class="chulgo-spacer"></div>
+        ${canEdit ? `<button type="button" class="org-team-edit-btn" data-finance-edit="${f.id}">✎</button>` : ''}
+      </div>
+      <div class="finance-row">
+        <span class="finance-row-label">ID</span>
+        <span class="finance-row-value">${escapeHtml(f.loginId)}</span>
+        <button type="button" class="finance-copy-btn" data-copy="${escapeHtml(f.loginId)}" data-copy-label="ID">복사</button>
+      </div>
+      <div class="finance-row">
+        <span class="finance-row-label">PW</span>
+        <span class="finance-row-value">${escapeHtml(f.loginPw)}</span>
+        <button type="button" class="finance-copy-btn" data-copy="${escapeHtml(f.loginPw)}" data-copy-label="비밀번호">복사</button>
+      </div>
+    </div>`;
+}
+
+function renderFinance() {
+  financeOrgLabel.textContent = myOrgInfo?.organization ? orgLabelOf(myOrgInfo.organization) : '';
+  const items = financeCredentials.filter(financeMatchesSearch);
+  financeEmpty.style.display = items.length ? 'none' : 'block';
+  financeListWrap.innerHTML = items.map(financeCardHTML).join('');
+}
+
+financeListWrap.addEventListener('click', async (ev) => {
+  const copyBtn = ev.target.closest('[data-copy]');
+  const editBtn = ev.target.closest('[data-finance-edit]');
+  if (copyBtn) {
+    try {
+      await navigator.clipboard.writeText(copyBtn.dataset.copy);
+      showToast(`${copyBtn.dataset.copyLabel}가 복사되었습니다.`);
+    } catch (err) {
+      console.error('복사 실패:', err);
+      showToast('복사에 실패했습니다.');
+    }
+    return;
+  }
+  if (editBtn) {
+    financeOpenPopup(financeCredentials.find((f) => f.id === editBtn.dataset.financeEdit));
+  }
+});
+
+function financeOpenPopup(item) {
+  financeEditingId = item ? item.id : null;
+  document.getElementById('finance-popup-title').textContent = item ? '계정 수정' : '계정 추가';
+  document.getElementById('finance-site-name').value = item ? item.siteName : '';
+  document.getElementById('finance-login-id').value = item ? item.loginId : '';
+  document.getElementById('finance-login-pw').value = item ? item.loginPw : '';
+  document.getElementById('finance-delete').classList.toggle('hidden', !item);
+  document.getElementById('finance-status').textContent = '';
+  document.getElementById('finance-popup').classList.remove('hidden');
+}
+
+document.getElementById('finance-add-open').addEventListener('click', () => financeOpenPopup(null));
+document.getElementById('finance-cancel').addEventListener('click', () => {
+  document.getElementById('finance-popup').classList.add('hidden');
+});
+
+document.getElementById('finance-save').addEventListener('click', async () => {
+  const statusEl = document.getElementById('finance-status');
+  const siteName = document.getElementById('finance-site-name').value.trim();
+  const loginId = document.getElementById('finance-login-id').value.trim();
+  const loginPw = document.getElementById('finance-login-pw').value.trim();
+  if (!siteName) { statusEl.textContent = '상호명을 입력해주세요.'; return; }
+  statusEl.textContent = '저장 중...';
+  try {
+    if (financeEditingId) {
+      await window.api.updateFinanceCredential({ id: financeEditingId, siteName, loginId, loginPw });
+    } else {
+      await window.api.createFinanceCredential({ siteName, loginId, loginPw });
+    }
+    document.getElementById('finance-popup').classList.add('hidden');
+  } catch (err) {
+    console.error('계정 메모 저장 실패:', err);
+    statusEl.textContent = err.message === 'NO_ORGANIZATION_ASSIGNED' ? '소속이 아직 배정되지 않았습니다.' : chulgoFriendlyError(err);
+  }
+});
+
+document.getElementById('finance-delete').addEventListener('click', async () => {
+  if (!financeEditingId) return;
+  if (!confirm('이 계정 메모를 삭제할까요?')) return;
+  try {
+    await window.api.deleteFinanceCredential(financeEditingId);
+    document.getElementById('finance-popup').classList.add('hidden');
+  } catch (err) {
+    document.getElementById('finance-status').textContent = chulgoFriendlyError(err);
+  }
+});
+
+financeSearchInput.addEventListener('input', () => {
+  financeSearchQuery = financeSearchInput.value.trim().toLowerCase();
+  renderFinance();
+});
+
+window.api.onFinanceUpdate((items) => {
+  financeCredentials = items;
+  renderFinance();
+});
 
 // ─── 금융사 비교시트 ──────────────────────────────────────────────────────
 // 캘린더 자리를 갈아치우는 "탭 전환" 방식은 장부와 동일 패턴을 그대로 따른다.
@@ -4995,7 +5147,7 @@ const AI_DEFAULT_WINDOW_SIZE = { width: 900, height: 760 };
 
 const memoPanel = document.getElementById('memo-panel');
 const aiPanel = document.getElementById('ai-panel');
-const VIEW_PANES = { calendar: appContentEl, memo: memoPanel, ai: aiPanel, chulgo: chulgoPanel, reminder: reminderPanel, compare: comparePanel, org: orgPanel };
+const VIEW_PANES = { calendar: appContentEl, memo: memoPanel, ai: aiPanel, chulgo: chulgoPanel, reminder: reminderPanel, compare: comparePanel, org: orgPanel, finance: financePanel };
 const VIEW_WINDOW_SIZE = {
   calendar: { key: CALENDAR_WINDOW_SIZE_KEY, default: null },
   memo: { key: MEMO_WINDOW_SIZE_KEY, default: MEMO_DEFAULT_WINDOW_SIZE },
@@ -5004,6 +5156,7 @@ const VIEW_WINDOW_SIZE = {
   reminder: { key: REMINDER_WINDOW_SIZE_KEY, default: REMINDER_DEFAULT_WINDOW_SIZE },
   compare: { key: COMPARE_WINDOW_SIZE_KEY, default: COMPARE_DEFAULT_WINDOW_SIZE },
   org: { key: ORG_WINDOW_SIZE_KEY, default: ORG_DEFAULT_WINDOW_SIZE },
+  finance: { key: FINANCE_WINDOW_SIZE_KEY, default: FINANCE_DEFAULT_WINDOW_SIZE },
 };
 let currentView = 'calendar';
 

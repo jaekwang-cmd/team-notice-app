@@ -102,6 +102,20 @@ service cloud.firestore {
       allow read, create: if request.auth != null && myPermission() == 'superAdmin';
       allow update, delete: if false;
     }
+    // 계정 메모(상호명/ID/PW) — 암호화 없이 평문 저장(재광님 확인, 나중에 Blaze 준비되면
+    // 암호화 구조로 옮길 수 있음). 그래서 읽기 범위를 "같은 소속(organization)"으로만
+    // 최대한 좁혀둔다 — 다른 본부/지점 사람은 아예 못 본다. 수정/삭제는 작성자 본인
+    // 또는 superAdmin만.
+    match /financeCredentials/{docId} {
+      allow read: if request.auth != null && (
+        myPermission() == 'superAdmin' ||
+        (myOrgExists() && myOrgDoc().organization == resource.data.organization)
+      );
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid;
+      allow update, delete: if request.auth != null && (
+        request.auth.uid == resource.data.authorUid || myPermission() == 'superAdmin'
+      );
+    }
   }
 }
 ```

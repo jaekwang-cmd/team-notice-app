@@ -450,6 +450,7 @@ function startOrgMemberSelfSubscription(uid) {
     uid,
     (info) => {
       myOrgInfo = info;
+      syncFinanceCredentialsSubscription();
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('org:my-info-update', info);
     },
     (err) => console.error('내 조직정보 subscribe error:', err)
@@ -462,6 +463,43 @@ function stopOrgMemberSelfSubscription() {
     unsubscribeOrgMemberSelf = null;
   }
   myOrgInfo = null;
+  stopFinanceCredentialsSubscription();
+}
+
+// --- 계정 메모(상호명/ID/PW) — 내 소속이 바뀌면(배정/이동) 그 소속 것만 다시 구독한다.
+// 조직 self-subscription 콜백에서 매번 호출되지만, 같은 소속이면 그냥 무시하고 아무
+// 것도 다시 안 한다(불필요한 재구독 방지). ---
+let unsubscribeFinanceCredentials = null;
+let financeCredentialsOrg = null;
+
+function syncFinanceCredentialsSubscription() {
+  const org = myOrgInfo && myOrgInfo.organization;
+  if (org === financeCredentialsOrg) return; // 그대로
+  if (unsubscribeFinanceCredentials) {
+    unsubscribeFinanceCredentials();
+    unsubscribeFinanceCredentials = null;
+  }
+  financeCredentialsOrg = org || null;
+  if (!org) {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('finance:update', []);
+    return;
+  }
+  unsubscribeFinanceCredentials = firebaseClient.subscribeToFinanceCredentials(
+    firebaseHandle.db,
+    org,
+    (items) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('finance:update', items);
+    },
+    (err) => console.error('계정 메모 subscribe error:', err)
+  );
+}
+
+function stopFinanceCredentialsSubscription() {
+  if (unsubscribeFinanceCredentials) {
+    unsubscribeFinanceCredentials();
+    unsubscribeFinanceCredentials = null;
+  }
+  financeCredentialsOrg = null;
 }
 
 function requireSuperAdmin() {
@@ -862,6 +900,10 @@ const CHANGELOG = {
     '🆕 본부장/지점장/팀장 계정은 사이드바에 "우리 조직"이 보이고, 담당 범위 직원들의 조직도와 이번 달 출고 장부(조회 전용)를 볼 수 있습니다',
     '🆕 설정에서 "링크를 열 때 쓸 브라우저"를 직접 고를 수 있습니다(시스템 기본/Chrome/Edge/Whale/Firefox)',
     '🆕 타이틀바 "본부시트" 버튼이 로그인한 계정의 소속에 맞는 시트로 열리도록 바뀌었습니다(최고관리자가 설정에서 본부/지점별 링크 지정)',
+  ],
+  '0.37.1': [
+    '🆕 사이드바에 "계정 메모"를 추가했습니다 — 상호명/ID/PW를 등록해두면 같은 본부/지점 소속끼리만 볼 수 있습니다(다른 소속에는 안 보임). ID/PW 옆 복사 버튼으로 바로 복사할 수 있습니다',
+    '재로그인할 때마다 소속/직급/권한이 초기화되던 문제를 고쳤습니다',
   ],
 };
 
@@ -1460,6 +1502,33 @@ ipcMain.handle('org:get-ledger-for-scope', async (_e, { month }) => {
   const uids = members.map((m) => m.uid);
   const entries = await firebaseClient.getChulgoEntriesForAuthors(firebaseHandle.db, uids, month);
   return { members, entries };
+});
+
+// --- 계정 메모(상호명/ID/PW) — 같은 소속끼리만 공유. 암호화 없이 평문 저장(재광님
+// 확인) — Blaze/Cloud Functions 준비되면 나중에 암호화 구조로 옮길 수 있게 organization
+// 필드로 접근 범위만 Firestore 규칙에서 좁혀둔다. ---
+ipcMain.handle('finance:create', async (_e, { siteName, loginId, loginPw }) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  const user = requireSignedInUser();
+  if (!myOrgInfo || !myOrgInfo.organization) throw new Error('NO_ORGANIZATION_ASSIGNED');
+  return firebaseClient.createFinanceCredential(firebaseHandle.db, {
+    siteName, loginId, loginPw,
+    organization: myOrgInfo.organization,
+    authorUid: user.uid,
+    authorName: myOrgInfo.name || user.displayName || '',
+  });
+});
+
+ipcMain.handle('finance:update', async (_e, { id, siteName, loginId, loginPw }) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSignedInUser();
+  await firebaseClient.updateFinanceCredential(firebaseHandle.db, id, { siteName, loginId, loginPw });
+});
+
+ipcMain.handle('finance:delete', async (_e, id) => {
+  if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
+  requireSignedInUser();
+  await firebaseClient.deleteFinanceCredential(firebaseHandle.db, id);
 });
 
 // 실제 회사 엑셀 템플릿을 그대로 로드해서 값만 채워넣는다 — 새로 스타일을 만들지

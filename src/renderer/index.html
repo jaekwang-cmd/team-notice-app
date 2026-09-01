@@ -44,6 +44,10 @@
       <button class="sidebar-nav-btn" data-view="compare" title="비교시트">
         <span class="sidebar-nav-icon">📊</span><span class="sidebar-nav-label">비교시트</span>
       </button>
+      <!-- 소속(본부/지점)이 배정된 사람에게만 renderer.js가 보여준다 -->
+      <button class="sidebar-nav-btn hidden" id="finance-nav-btn" data-view="finance" title="계정 메모">
+        <span class="sidebar-nav-icon">🔑</span><span class="sidebar-nav-label">계정 메모</span>
+      </button>
       <!-- superAdmin/orgManager/teamManager에게만 renderer.js가 보여준다(일반 직원은 hidden 유지) -->
       <button class="sidebar-nav-btn hidden" id="org-nav-btn" data-view="org" title="조직 관리">
         <span class="sidebar-nav-icon">🏢</span><span class="sidebar-nav-label" id="org-nav-label">조직 관리</span>
@@ -267,6 +271,21 @@
           <div class="compare-sheet" id="compare-sheet-0"></div>
           <div class="compare-sheet" id="compare-sheet-1"></div>
         </div>
+      </div>
+    </div>
+
+    <div id="finance-panel" class="view-panel hidden" data-view-pane="finance">
+      <div class="glass-card finance-card">
+        <div class="chulgo-header">
+          <h3><span class="chulgo-icon-badge">🔑</span> 계정 메모</h3>
+          <span id="finance-org-label" class="chulgo-month-count"></span>
+          <div class="chulgo-spacer"></div>
+          <button id="finance-add-open" class="btn btn-primary btn-lg chulgo-primary-btn">+ 계정 추가</button>
+        </div>
+        <p class="chulgo-mini-hint">같은 소속(본부/지점) 사람들끼리만 보여요. 다른 소속에는 안 보입니다.</p>
+        <input type="text" id="finance-search" class="reminder-search-input" placeholder="🔍 상호명으로 검색">
+        <div id="finance-list-wrap" class="reminder-list-wrap"></div>
+        <div class="chulgo-empty" id="finance-empty">등록된 계정이 없습니다. "+ 계정 추가"로 시작하세요.</div>
       </div>
     </div>
 
@@ -562,6 +581,32 @@
         <button type="button" id="reminder-save">저장</button>
         <button type="button" id="reminder-cancel">취소</button>
         <span id="reminder-status" class="chulgo-mini-hint"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="finance-popup" class="chulgo-mini-overlay hidden">
+    <div class="chulgo-mini-card">
+      <h4 id="finance-popup-title">계정 추가</h4>
+      <div class="reminder-form-grid">
+        <label class="reminder-form-field">
+          <span>상호명</span>
+          <input type="text" id="finance-site-name" placeholder="현대캐피탈" maxlength="40">
+        </label>
+        <label class="reminder-form-field">
+          <span>ID</span>
+          <input type="text" id="finance-login-id" maxlength="60">
+        </label>
+      </div>
+      <label class="reminder-form-field reminder-form-note">
+        <span>PW</span>
+        <input type="text" id="finance-login-pw" maxlength="60">
+      </label>
+      <div class="chulgo-mini-actions">
+        <button type="button" id="finance-save">저장</button>
+        <button type="button" id="finance-delete" class="btn btn-danger hidden">삭제</button>
+        <button type="button" id="finance-cancel">취소</button>
+        <span id="finance-status" class="chulgo-mini-hint"></span>
       </div>
     </div>
   </div>

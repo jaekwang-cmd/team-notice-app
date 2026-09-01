@@ -1233,6 +1233,59 @@ body[data-card-style='3d'] .glass-card {
   font-size: 11px;
 }
 
+/* 계정 메모 — 상호명/ID/PW를 바로 다 보여주는 컴팩트 카드 */
+.finance-card-item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 14px);
+  background: var(--color-panel-tint-dark, var(--color-input-bg));
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.finance-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13.5px;
+}
+.finance-card-author {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.finance-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  padding: 3px 0;
+  font-variant-numeric: tabular-nums;
+}
+.finance-row-label {
+  flex: 0 0 28px;
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  font-size: 11px;
+}
+.finance-row-value {
+  flex: 1;
+  color: var(--color-text-primary);
+  word-break: break-all;
+}
+.finance-copy-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.finance-copy-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 .org-branch-links-list .theme-row input.org-branch-link-input {
   flex: 1;
   max-width: 320px;

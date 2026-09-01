@@ -329,10 +329,12 @@ const ORG_MEMBER_DEFAULTS = {
 
 async function ensureOrgMemberRecord(db, user) {
   const ref = doc(db, 'orgMembers', user.uid);
+  // 문서가 이미 있으면 절대 다시 안 쓴다 — superAdmin 본인은 규칙상 자기 문서를
+  // update할 수 있어서, 존재 확인 없이 무조건 setDoc을 했더니 재로그인할 때마다
+  // 본인의 permission/organization/team/position이 기본값으로 리셋되는 버그가 있었다.
+  const existing = await getDoc(ref);
+  if (existing.exists()) return;
   try {
-    // 이미 존재하면(=배정된 적 있으면) Firestore 규칙이 update로 보고 막는다 — 그게
-    // 의도한 동작이다(자기 자신의 소속/권한을 스스로 덮어쓰지 못하게). 여기선 그냥
-    // "처음 로그인한 사람" 최초 1회 등록만 성공하면 된다.
     await setDoc(ref, {
       ...ORG_MEMBER_DEFAULTS,
       uid: user.uid,
@@ -343,8 +345,7 @@ async function ensureOrgMemberRecord(db, user) {
     });
   } catch (err) {
     if (err && err.code !== 'permission-denied') throw err;
-    // 이미 등록된 사용자 — 조용히 무시. lastLoginAt 갱신은 본인 update라 이것도
-    // superAdmin 전용 규칙에 막히므로, 로그인 시각은 필요하면 나중에 별도 필드로 뺀다.
+    // 최초 등록 시점이 겹치는 등의 드문 경합 — 조용히 무시.
   }
 }
 
@@ -471,6 +472,44 @@ async function getChulgoEntriesForAuthors(db, uids, month) {
   return results.flat();
 }
 
+// --- 계정 메모 (상호명/ID/PW) — 같은 본부/지점 사람들끼리만 보이는 공유 메모.
+// 재광님 확인: Cloud Functions/암호화 없이 일단 평문으로 저장 — 그래서 접근 범위를
+// "같은 소속"으로만 좁혀서(Firestore 규칙) 위험을 줄인다. 나중에 Blaze 준비되면
+// 이 컬렉션을 암호화 구조로 옮길 수 있다. ---
+
+function financeCredentialFromSnap(docSnap) {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    siteName: data.siteName || '',
+    loginId: data.loginId || '',
+    loginPw: data.loginPw || '',
+    organization: data.organization || '',
+    authorUid: data.authorUid || '',
+    authorName: data.authorName || '',
+  };
+}
+
+function subscribeToFinanceCredentials(db, organization, onUpdate, onError) {
+  const q = query(collection(db, 'financeCredentials'), where('organization', '==', organization));
+  return onSnapshot(q, (snapshot) => {
+    onUpdate(snapshot.docs.map(financeCredentialFromSnap));
+  }, onError);
+}
+
+async function createFinanceCredential(db, data) {
+  const ref = await addDoc(collection(db, 'financeCredentials'), { ...data, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  return ref.id;
+}
+
+async function updateFinanceCredential(db, id, data) {
+  await updateDoc(doc(db, 'financeCredentials', id), { ...data, updatedAt: serverTimestamp() });
+}
+
+async function deleteFinanceCredential(db, id) {
+  await deleteDoc(doc(db, 'financeCredentials', id));
+}
+
 module.exports = {
   initFirebase,
   signInWithGoogleIdToken,
@@ -508,4 +547,8 @@ module.exports = {
   getBranchLinks,
   setBranchLinks,
   getChulgoEntriesForAuthors,
+  subscribeToFinanceCredentials,
+  createFinanceCredential,
+  updateFinanceCredential,
+  deleteFinanceCredential,
 };

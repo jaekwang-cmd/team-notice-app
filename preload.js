@@ -95,6 +95,13 @@ contextBridge.exposeInMainWorld('api', {
   getBranchLinks: () => ipcRenderer.invoke('org:get-branch-links'),
   setBranchLinks: (links) => ipcRenderer.invoke('org:set-branch-links', links),
   getOrgLedgerForScope: (payload) => ipcRenderer.invoke('org:get-ledger-for-scope', payload),
+
+  createFinanceCredential: (payload) => ipcRenderer.invoke('finance:create', payload),
+  updateFinanceCredential: (payload) => ipcRenderer.invoke('finance:update', payload),
+  deleteFinanceCredential: (id) => ipcRenderer.invoke('finance:delete', id),
+  onFinanceUpdate: (callback) => {
+    ipcRenderer.on('finance:update', (_event, items) => callback(items));
+  },
   aiFillChulgo: (payload) => ipcRenderer.invoke('chulgo:ai-fill', payload),
   aiChat: (payload) => ipcRenderer.invoke('ai:chat', payload),
 
