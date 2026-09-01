@@ -278,13 +278,12 @@
       <div class="glass-card finance-card">
         <div class="chulgo-header">
           <h3><span class="chulgo-icon-badge">🔑</span> 계정 메모</h3>
-          <span id="finance-org-label" class="chulgo-month-count"></span>
+          <span id="finance-org-label" class="chulgo-month-count" title="같은 소속(본부/지점) 사람들끼리만 보여요"></span>
+          <input type="text" id="finance-search" class="finance-search-input" placeholder="🔍 상호명/담당자 검색">
           <div class="chulgo-spacer"></div>
-          <button id="finance-add-open" class="btn btn-primary btn-lg chulgo-primary-btn">+ 계정 추가</button>
+          <button id="finance-add-open" class="btn btn-primary chulgo-mini-btn">+ 계정 추가</button>
         </div>
-        <p class="chulgo-mini-hint">같은 소속(본부/지점) 사람들끼리만 보여요. 다른 소속에는 안 보입니다.</p>
-        <input type="text" id="finance-search" class="reminder-search-input" placeholder="🔍 상호명으로 검색">
-        <div id="finance-list-wrap" class="reminder-list-wrap"></div>
+        <div id="finance-list-wrap" class="finance-grid"></div>
         <div class="chulgo-empty" id="finance-empty">등록된 계정이 없습니다. "+ 계정 추가"로 시작하세요.</div>
       </div>
     </div>
@@ -592,6 +591,10 @@
         <label class="reminder-form-field">
           <span>상호명</span>
           <input type="text" id="finance-site-name" placeholder="현대캐피탈" maxlength="40">
+        </label>
+        <label class="reminder-form-field">
+          <span>담당자</span>
+          <input type="text" id="finance-author-name" placeholder="정재광" maxlength="30">
         </label>
         <label class="reminder-form-field">
           <span>ID</span>

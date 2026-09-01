@@ -1123,6 +1123,7 @@ body[data-card-style='3d'] .glass-card {
 .org-unit-manager {
   font-size: 12.5px;
   color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
 }
 .org-unit-manager.vacant {
   color: var(--color-accent);
@@ -1143,6 +1144,7 @@ body[data-card-style='3d'] .glass-card {
   border-radius: var(--radius-lg, 14px);
   background: var(--color-panel-tint-dark, var(--color-input-bg));
   padding: 12px;
+  overflow: hidden;
 }
 .org-team-card-head {
   display: flex;
@@ -1159,6 +1161,7 @@ body[data-card-style='3d'] .glass-card {
   font-size: 12px;
   color: var(--color-text-secondary);
   margin-bottom: 8px;
+  overflow-wrap: anywhere;
 }
 .org-team-manager.vacant {
   color: var(--color-accent);
@@ -1199,10 +1202,12 @@ body[data-card-style='3d'] .glass-card {
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-primary);
+  overflow-wrap: anywhere;
 }
 .org-member-position {
   font-size: 11.5px;
   color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
 }
 .org-member-detail {
   display: none;
@@ -1210,6 +1215,7 @@ body[data-card-style='3d'] .glass-card {
   color: var(--color-text-secondary);
   padding: 4px 8px 8px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .org-member-card.expanded .org-member-detail {
   display: block;
@@ -1233,56 +1239,131 @@ body[data-card-style='3d'] .glass-card {
   font-size: 11px;
 }
 
-/* 계정 메모 — 상호명/ID/PW를 바로 다 보여주는 컴팩트 카드 */
-.finance-card-item {
+/* 계정 메모 — 상호명별 카드, 그 안에 관리자별 ID/PW 미니 블록이 나란히. "ID/PW를
+   빨리 찾는 것"이 목적이라 촘촘한 그리드로, 스크롤 없이 최대한 많이 보이게 짠다. */
+.finance-card {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.finance-search-input {
+  flex: 0 1 220px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg, 14px);
-  background: var(--color-panel-tint-dark, var(--color-input-bg));
-  padding: 12px 14px;
-  margin-bottom: 10px;
-}
-.finance-card-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-size: 13.5px;
-}
-.finance-card-author {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-}
-.finance-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  padding: 3px 0;
-  font-variant-numeric: tabular-nums;
-}
-.finance-row-label {
-  flex: 0 0 28px;
-  color: var(--color-text-secondary);
-  font-weight: 700;
-  font-size: 11px;
-}
-.finance-row-value {
-  flex: 1;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: var(--color-input-bg);
   color: var(--color-text-primary);
-  word-break: break-all;
 }
-.finance-copy-btn {
-  flex-shrink: 0;
+.finance-search-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+/* 격자(grid)면 한 줄의 모든 칸이 같은 폭으로 강제돼서 카드 하나가 길어지면 값이
+   잘리거나 줄바꿈될 수밖에 없다 — 대신 각 카드가 자기 내용 길이만큼 폭을 갖고,
+   자리가 없으면 카드째로 다음 줄로 넘어가는 흐름(flex-wrap) 배치로 바꿨다. */
+.finance-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.finance-site-card {
+  flex: 0 0 auto;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 2px 8px;
-  font-size: 11px;
+  border-radius: 10px;
+  background: var(--color-panel-tint-dark, var(--color-input-bg));
+  padding: 8px;
+  min-width: 200px;
+}
+.finance-site-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  padding: 2px 2px 6px;
+  border-bottom: 1px solid var(--color-divider);
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+.finance-persons-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* 값(ID/PW)이 줄바꿈 없이 한 줄로 다 보여야 해서, 블록 너비를 50%로 강제 분할하지
+   않고 내용 길이에 맞춰 자연스럽게 넓어지게 한다 — 한 줄에 안 들어가면 다음 사람이
+   카드 안에서 줄바꿈되어 아래로 내려간다(값 자체는 절대 안 잘림). */
+.finance-person-block {
+  flex: 0 0 auto;
+  min-width: 110px;
+  background: var(--color-input-bg);
+  border-radius: 7px;
+  padding: 5px 8px;
+}
+.finance-person-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  margin-bottom: 3px;
+}
+.finance-edit-icon {
+  border: none;
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  padding: 1px 2px;
+  border-radius: 4px;
 }
-.finance-copy-btn:hover {
-  border-color: var(--color-accent);
+.finance-edit-icon:hover {
+  background: var(--color-panel-tint-dark, transparent);
+  color: var(--color-accent);
+}
+.finance-mini-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  padding: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+.finance-mini-label {
+  flex: 0 0 18px;
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  font-size: 10.5px;
+  padding-top: 1px;
+}
+.finance-mini-value {
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+.finance-mini-copy {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 1px 2px;
+  border-radius: 4px;
+}
+.finance-mini-copy:hover {
+  background: var(--color-input-bg);
   color: var(--color-accent);
 }
 

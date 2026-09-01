@@ -1259,11 +1259,20 @@ document.getElementById('btn-close').onclick = () => window.api.closeWindow();
 })();
 
 // 제목표시줄 바로가기 — 목록은 main 프로세스가 갖고 있고(신뢰 가능한 고정 목록), 여기선
-// id로만 열어달라고 요청한다.
-(async () => {
+// id로만 열어달라고 요청한다. "본부시트"는 로그인한 계정의 소속에 따라 다르게 뜨는데,
+// 앱이 막 켜졌을 때는 소속 정보(Firestore 조회)가 아직 안 온 상태라 처음엔 그 버튼이
+// 빠진 채로 뜬다 — 소속 정보가 나중에 도착하면(org:my-info-update) 다시 그려서 반영한다.
+async function renderTitlebarShortcuts() {
   const wrap = document.getElementById('titlebar-shortcuts');
   if (!wrap) return;
-  const links = await window.api.getShortcutLinks();
+  let links;
+  try {
+    links = await window.api.getShortcutLinks();
+  } catch (err) {
+    console.error('바로가기 목록 불러오기 실패:', err);
+    return;
+  }
+  wrap.innerHTML = '';
   links.forEach((link) => {
     const btn = document.createElement('button');
     btn.className = 'titlebar-shortcut-btn';
@@ -1272,7 +1281,9 @@ document.getElementById('btn-close').onclick = () => window.api.closeWindow();
     btn.addEventListener('click', () => window.api.openShortcutLink(link.id));
     wrap.appendChild(btn);
   });
-})();
+}
+renderTitlebarShortcuts();
+window.api.onOrgMyInfoUpdate(renderTitlebarShortcuts);
 
 const pinBtn = document.getElementById('btn-pin');
 pinBtn.onclick = async () => {
@@ -4247,17 +4258,21 @@ function orgApplyMyInfo(info) {
 async function orgRenderBranchLinksEditor() {
   const section = document.getElementById('org-branch-links-section');
   if (section.classList.contains('hidden')) return;
-  await orgLoadConstantsOnce();
-  const links = await window.api.getBranchLinks();
-  const listEl = document.getElementById('org-branch-links-list');
-  listEl.innerHTML = '';
-  orgConstants.organizations.forEach((org) => {
-    const row = document.createElement('div');
-    row.className = 'theme-row';
-    row.innerHTML = `<span>${escapeHtml(org.label)}</span>
-      <input type="text" class="org-branch-link-input" data-org="${org.key}" placeholder="https://docs.google.com/..." value="${escapeHtml(links[org.key] || '')}">`;
-    listEl.appendChild(row);
-  });
+  try {
+    await orgLoadConstantsOnce();
+    const links = await window.api.getBranchLinks();
+    const listEl = document.getElementById('org-branch-links-list');
+    listEl.innerHTML = '';
+    orgConstants.organizations.forEach((org) => {
+      const row = document.createElement('div');
+      row.className = 'theme-row';
+      row.innerHTML = `<span>${escapeHtml(org.label)}</span>
+        <input type="text" class="org-branch-link-input" data-org="${org.key}" placeholder="https://docs.google.com/..." value="${escapeHtml(links[org.key] || '')}">`;
+      listEl.appendChild(row);
+    });
+  } catch (err) {
+    console.error('본부/지점 시트 링크 불러오기 실패:', err);
+  }
 }
 
 document.getElementById('org-branch-links-save').addEventListener('click', async () => {
@@ -4713,28 +4728,39 @@ let financeEditingId = null;
 
 function financeMatchesSearch(f) {
   if (!financeSearchQuery) return true;
-  return (f.siteName || '').toLowerCase().includes(financeSearchQuery);
+  return `${f.siteName || ''} ${f.authorName || ''}`.toLowerCase().includes(financeSearchQuery);
 }
 
-function financeCardHTML(f) {
+// 사람 1명(1건)의 미니 블록 — 같은 상호명 카드 안에 이게 여러 개 나란히 들어간다.
+function financePersonBlockHTML(f) {
   const canEdit = myOrgInfo && (myOrgInfo.uid === f.authorUid || myOrgInfo.permission === 'superAdmin');
   return `
-    <div class="finance-card-item" data-id="${f.id}">
-      <div class="finance-card-head">
-        <strong>${escapeHtml(f.siteName || '(이름 없음)')}</strong>
-        <span class="finance-card-author">${escapeHtml(f.authorName || '')}</span>
-        <div class="chulgo-spacer"></div>
-        ${canEdit ? `<button type="button" class="org-team-edit-btn" data-finance-edit="${f.id}">✎</button>` : ''}
+    <div class="finance-person-block" data-id="${f.id}">
+      <div class="finance-person-name">
+        ${escapeHtml(f.authorName || '')}
+        ${canEdit ? `<button type="button" class="finance-edit-icon" data-finance-edit="${f.id}" title="수정">✎</button>` : ''}
       </div>
-      <div class="finance-row">
-        <span class="finance-row-label">ID</span>
-        <span class="finance-row-value">${escapeHtml(f.loginId)}</span>
-        <button type="button" class="finance-copy-btn" data-copy="${escapeHtml(f.loginId)}" data-copy-label="ID">복사</button>
+      <div class="finance-mini-row">
+        <span class="finance-mini-label">ID</span>
+        <span class="finance-mini-value">${escapeHtml(f.loginId)}</span>
+        <button type="button" class="finance-mini-copy" data-copy="${escapeHtml(f.loginId)}" data-copy-label="ID" title="ID 복사">⧉</button>
       </div>
-      <div class="finance-row">
-        <span class="finance-row-label">PW</span>
-        <span class="finance-row-value">${escapeHtml(f.loginPw)}</span>
-        <button type="button" class="finance-copy-btn" data-copy="${escapeHtml(f.loginPw)}" data-copy-label="비밀번호">복사</button>
+      <div class="finance-mini-row">
+        <span class="finance-mini-label">PW</span>
+        <span class="finance-mini-value">${escapeHtml(f.loginPw)}</span>
+        <button type="button" class="finance-mini-copy" data-copy="${escapeHtml(f.loginPw)}" data-copy-label="비밀번호" title="PW 복사">⧉</button>
+      </div>
+    </div>`;
+}
+
+// 카드 하나 = 상호명 하나. 같은 금융사를 여러 관리자가 갖고 있으면 그 사람들 블록이
+// 한 카드 안에 나란히 들어가서(가로 배치) 비교하기 쉽다.
+function financeSiteCardHTML(siteName, entries) {
+  return `
+    <div class="finance-site-card">
+      <div class="finance-site-name">${escapeHtml(siteName)}</div>
+      <div class="finance-persons-row">
+        ${entries.map(financePersonBlockHTML).join('')}
       </div>
     </div>`;
 }
@@ -4743,7 +4769,19 @@ function renderFinance() {
   financeOrgLabel.textContent = myOrgInfo?.organization ? orgLabelOf(myOrgInfo.organization) : '';
   const items = financeCredentials.filter(financeMatchesSearch);
   financeEmpty.style.display = items.length ? 'none' : 'block';
-  financeListWrap.innerHTML = items.map(financeCardHTML).join('');
+
+  // 상호명 기준으로 묶는다 — "금융사 ID/PW를 빨리 찾는 것"이 1차 목적이라, 같은
+  // 금융사를 쓰는 관리자들이 한 카드 안에 모여 보이는 게 비교하기 더 편하다.
+  const bySite = new Map();
+  items.forEach((f) => {
+    const key = (f.siteName || '').trim() || '(이름 없음)';
+    if (!bySite.has(key)) bySite.set(key, []);
+    bySite.get(key).push(f);
+  });
+
+  financeListWrap.innerHTML = [...bySite.entries()]
+    .map(([siteName, entries]) => financeSiteCardHTML(siteName, entries))
+    .join('');
 }
 
 financeListWrap.addEventListener('click', async (ev) => {
@@ -4768,6 +4806,7 @@ function financeOpenPopup(item) {
   financeEditingId = item ? item.id : null;
   document.getElementById('finance-popup-title').textContent = item ? '계정 수정' : '계정 추가';
   document.getElementById('finance-site-name').value = item ? item.siteName : '';
+  document.getElementById('finance-author-name').value = item ? item.authorName : (myOrgInfo?.name || '');
   document.getElementById('finance-login-id').value = item ? item.loginId : '';
   document.getElementById('finance-login-pw').value = item ? item.loginPw : '';
   document.getElementById('finance-delete').classList.toggle('hidden', !item);
@@ -4783,15 +4822,16 @@ document.getElementById('finance-cancel').addEventListener('click', () => {
 document.getElementById('finance-save').addEventListener('click', async () => {
   const statusEl = document.getElementById('finance-status');
   const siteName = document.getElementById('finance-site-name').value.trim();
+  const authorName = document.getElementById('finance-author-name').value.trim();
   const loginId = document.getElementById('finance-login-id').value.trim();
   const loginPw = document.getElementById('finance-login-pw').value.trim();
   if (!siteName) { statusEl.textContent = '상호명을 입력해주세요.'; return; }
   statusEl.textContent = '저장 중...';
   try {
     if (financeEditingId) {
-      await window.api.updateFinanceCredential({ id: financeEditingId, siteName, loginId, loginPw });
+      await window.api.updateFinanceCredential({ id: financeEditingId, siteName, authorName, loginId, loginPw });
     } else {
-      await window.api.createFinanceCredential({ siteName, loginId, loginPw });
+      await window.api.createFinanceCredential({ siteName, authorName, loginId, loginPw });
     }
     document.getElementById('finance-popup').classList.add('hidden');
   } catch (err) {
@@ -5182,7 +5222,15 @@ async function switchView(name) {
   if (!VIEW_PANES[name] || name === currentView) return;
   if (name === 'chulgo') await initChulgoViewOnce();
   if (name === 'compare') renderCompareAll();
-  if (name === 'org') { await orgFetchMembers(); renderOrgChart(); }
+  if (name === 'org') {
+    try {
+      await orgFetchMembers();
+      renderOrgChart();
+    } catch (err) {
+      console.error('조직 관리 화면 로딩 실패:', err);
+      orgListWrap.innerHTML = `<div class="chulgo-mini-hint">${escapeHtml(chulgoFriendlyError(err))}</div>`;
+    }
+  }
 
   // 콘텐츠부터 즉시 바꾼다 — 창 크기 IPC 왕복(save/restore)이 끝나야만 화면이
   // 바뀌던 게 "전환이 느리다"는 체감의 주 원인이었다. 클래스 토글은 동기 작업이라

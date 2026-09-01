@@ -909,6 +909,10 @@ const CHANGELOG = {
     '조직도에서 팀장을 배정해도 계속 "팀장 공석"으로 보이던 문제를 고쳤습니다',
     '조직 장부 탭 진입 시 오류가 뜨던 문제를 고쳤습니다(Firestore 색인 문제 + 직급별 수수료 계산 오류)',
   ],
+  '0.37.3': [
+    '안정화 점검 — 조직 관리/설정 화면에서 데이터를 못 불러왔을 때 "예상치 못한 오류" 토스트만 뜨고 원인을 알 수 없던 부분을 고쳤습니다',
+    '긴 이메일/이름이 조직도 카드 밖으로 넘칠 수 있던 부분을 고쳤습니다',
+  ],
 };
 
 function compareVersions(a, b) {
@@ -1511,7 +1515,7 @@ ipcMain.handle('org:get-ledger-for-scope', async (_e, { month }) => {
 // --- 계정 메모(상호명/ID/PW) — 같은 소속끼리만 공유. 암호화 없이 평문 저장(재광님
 // 확인) — Blaze/Cloud Functions 준비되면 나중에 암호화 구조로 옮길 수 있게 organization
 // 필드로 접근 범위만 Firestore 규칙에서 좁혀둔다. ---
-ipcMain.handle('finance:create', async (_e, { siteName, loginId, loginPw }) => {
+ipcMain.handle('finance:create', async (_e, { siteName, authorName, loginId, loginPw }) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   const user = requireSignedInUser();
   if (!myOrgInfo || !myOrgInfo.organization) throw new Error('NO_ORGANIZATION_ASSIGNED');
@@ -1519,14 +1523,14 @@ ipcMain.handle('finance:create', async (_e, { siteName, loginId, loginPw }) => {
     siteName, loginId, loginPw,
     organization: myOrgInfo.organization,
     authorUid: user.uid,
-    authorName: myOrgInfo.name || user.displayName || '',
+    authorName: authorName || myOrgInfo.name || user.displayName || '',
   });
 });
 
-ipcMain.handle('finance:update', async (_e, { id, siteName, loginId, loginPw }) => {
+ipcMain.handle('finance:update', async (_e, { id, siteName, authorName, loginId, loginPw }) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireSignedInUser();
-  await firebaseClient.updateFinanceCredential(firebaseHandle.db, id, { siteName, loginId, loginPw });
+  await firebaseClient.updateFinanceCredential(firebaseHandle.db, id, { siteName, authorName, loginId, loginPw });
 });
 
 ipcMain.handle('finance:delete', async (_e, id) => {
@@ -2137,13 +2141,19 @@ const TITLEBAR_SHORTCUTS = [
   { id: 'cafe', label: '에이원카페', url: 'https://cafe.naver.com/a1autocarinformation' },
 ];
 
-ipcMain.handle('shortcuts:get-list', () => {
-  return TITLEBAR_SHORTCUTS.map(({ id, label }) => {
-    if (id === 'sheet3' && myOrgInfo && myOrgInfo.organization) {
-      return { id, label: `${orgLabelOf(myOrgInfo.organization)} 시트` };
+ipcMain.handle('shortcuts:get-list', async () => {
+  const list = [];
+  for (const item of TITLEBAR_SHORTCUTS) {
+    if (item.id === 'sheet3') {
+      // 소속이 아직 배정 안 된 계정에는 "본부시트" 버튼 자체를 안 보여준다 — 재광님
+      // 확인: 본부/지점마다 완전히 다른 시트라, 소속 없이 뜨면 엉뚱한 링크로 오해할 수 있음.
+      if (!myOrgInfo || !myOrgInfo.organization) continue;
+      list.push({ id: item.id, label: `${orgLabelOf(myOrgInfo.organization)} 시트` });
+      continue;
     }
-    return { id, label };
-  });
+    list.push({ id: item.id, label: item.label });
+  }
+  return list;
 });
 
 ipcMain.handle('shortcuts:open', async (_e, { id } = {}) => {
