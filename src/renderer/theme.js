@@ -112,6 +112,30 @@ const LIGHT_DEFAULTS = buildPreset({
 // --- 추가 프리셋 5종 — "Accent 색만 다른 복사본"이 아니라 배경/서피스 톤(중립·웜·네이비 등)
 // 자체가 다른, 서로 완결된 팔레트가 되도록 씨앗값을 따로 잡았다. ---
 const THEME_PRESET_SEEDS = {
+  secretForest: {
+    isDark: false, bg: '#eef0e5', surface: '#fafaf1', text: '#283a30', textSecondary: '#596c5d',
+    accent: '#476a4e', sunday: '#ac5c52', saturday: '#547483',
+  },
+  starObservatory: {
+    isDark: true, bg: '#171e32', surface: '#20283d', text: '#ece7d9', textSecondary: '#b2b7c6',
+    accent: '#d5bc84', sunday: '#d89b98', saturday: '#9dbbdd',
+  },
+  sunsetLetter: {
+    isDark: false, bg: '#fff0e6', surface: '#fffaf3', text: '#594a47', textSecondary: '#806761',
+    accent: '#a75549', sunday: '#ae554b', saturday: '#567e82',
+  },
+  winterCabin: {
+    isDark: false, bg: '#ece9e3', surface: '#faf7f0', text: '#4b3d32', textSecondary: '#746350',
+    accent: '#78563d', sunday: '#ad5d51', saturday: '#617d83',
+  },
+  wood: {
+    isDark: false, bg: '#fcfaf6', surface: '#fcfaf6', text: '#3e3831', textSecondary: '#787065',
+    accent: '#79604a', sunday: '#b86c5c', saturday: '#718278',
+  },
+  nightStudy: {
+    isDark: false, bg: '#f1ebde', surface: '#f5f0e6', text: '#3d382f', textSecondary: '#7a7163',
+    accent: '#58634e', sunday: '#a96555', saturday: '#657963',
+  },
   softDark: {
     isDark: true, bg: '#211f1e', surface: '#2b2825', text: '#ece7e1', textSecondary: '#a89f95',
     accent: '#d2954f', sunday: '#e2887c', saturday: '#7fa0c9',
@@ -138,10 +162,36 @@ const THEME_PRESETS = { dark: DARK_DEFAULTS, light: LIGHT_DEFAULTS };
 Object.keys(THEME_PRESET_SEEDS).forEach((id) => {
   THEME_PRESETS[id] = buildPreset(THEME_PRESET_SEEDS[id]);
 });
+Object.assign(THEME_PRESETS.wood, {
+  border: '#e1d8cb', divider: '#e7e0d5', calendarBg: '#fcfaf6', cellBg: '#fcfaf6',
+  cellHover: '#f4eee4', selectedDay: '#eee4d5', today: '#f3eddf', inputBg: '#fffdf9',
+  eventBg: '#eee6da', eventBorder: '#cfbfa9', eventText: '#574939',
+  secondaryButtonBg: '#eee6da', dateFontSize: '13', eventFontSize: '11',
+});
+Object.assign(THEME_PRESETS.nightStudy, {
+  border: '#dcd3c2', divider: '#e4dbca', calendarBg: '#f5f0e6', cellBg: '#f5f0e6',
+  cellHover: '#ece7da', selectedDay: '#e2e5d7', today: '#e9ebdf', inputBg: '#faf7ef',
+  eventBg: '#e7e9dc', eventBorder: '#bdc5ad', eventText: '#46503c',
+  buttonText: '#fcf8ee', secondaryButtonBg: '#e7e9dc', dateFontSize: '13', eventFontSize: '11',
+});
+for (const mode of ['secretForest', 'starObservatory', 'sunsetLetter', 'winterCabin']) {
+  Object.assign(THEME_PRESETS[mode], {
+    calendarBg: THEME_PRESETS[mode].panelBg, cellBg: THEME_PRESETS[mode].panelBg,
+    dateFontSize: '13', eventFontSize: '11',
+  });
+}
+THEME_PRESETS.starObservatory.buttonText = '#1a2235';
+THEME_PRESETS.nightStudy.textSecondary = '#6d5f4f';
 
 // 설정 화면의 프리셋 미리보기 카드를 그릴 때 쓰는 메타 정보 — 실제 색은
 // THEME_PRESETS[id]에서 그대로 가져오므로 여기엔 이름/한 줄 설명만 둔다.
 const THEME_PRESET_META = [
+  { id: 'wood', label: '우드 다이어리', blurb: '따뜻한 종이 + 내추럴 오크' },
+  { id: 'nightStudy', label: '밤의 서재', blurb: '깊은 월넛 + 크림 종이 + 세이지' },
+  { id: 'secretForest', label: '비밀의 숲', blurb: '숲의 입구 → 오솔길 → 숲속 책방' },
+  { id: 'starObservatory', label: '별빛 천문관', blurb: '별빛 언덕 → 테라스 → 별지기의 서재' },
+  { id: 'sunsetLetter', label: '노을의 편지', blurb: '노을 바다 → 해변 → 바닷가 편지방' },
+  { id: 'winterCabin', label: '겨울의 오두막', blurb: '겨울 숲 → 앞마당 → 벽난로 곁' },
   { id: 'dark', label: '다크', blurb: '차분한 슬레이트 톤' },
   { id: 'light', label: '라이트', blurb: '깔끔한 뉴트럴 톤' },
   { id: 'softDark', label: '소프트 다크', blurb: '따뜻한 차콜 + 앰버' },
@@ -152,6 +202,13 @@ const THEME_PRESET_META = [
 ];
 
 function applyTheme(theme) {
+  const isNightStudy = theme.mode === 'nightStudy';
+  document.body.dataset.journalTheme = isNightStudy ? 'nightStudy' : theme.mode === 'wood' ? 'wood' : 'other';
+  const themeSelect = document.getElementById('journal-theme-select');
+  if (themeSelect) themeSelect.value = !theme.mode ? 'dark'
+    : Object.prototype.hasOwnProperty.call(THEME_PRESETS, theme.mode) ? theme.mode : 'custom';
+  const themeName = document.getElementById('journal-theme-name');
+  if (themeName) themeName.textContent = isNightStudy ? '밤의 서재' : '나의 다이어리';
   const root = document.documentElement.style;
 
   COLOR_FIELDS.forEach((f) => {
@@ -168,12 +225,35 @@ function applyTheme(theme) {
     }
   });
 
-  if (theme.font) root.setProperty('--font-family', theme.font);
-  else root.removeProperty('--font-family');
+  if (theme.font) {
+    root.setProperty('--font-family', theme.font);
+    root.setProperty('--journal-serif', theme.font);
+    root.setProperty('--journal-note-font', theme.font);
+    window.appFonts?.ensureLoaded(theme.font);
+  } else {
+    root.removeProperty('--font-family');
+    if (isNightStudy) {
+      const serif = "'Gowun Batang', 'Batang', serif";
+      const handwriting = "'Nanum Pen Script', 'Malgun Gothic', sans-serif";
+      root.setProperty('--journal-serif', serif);
+      root.setProperty('--journal-note-font', handwriting);
+      window.appFonts?.ensureLoaded(serif);
+      window.appFonts?.ensureLoaded(handwriting);
+    } else {
+      root.removeProperty('--journal-serif');
+      root.removeProperty('--journal-note-font');
+    }
+  }
+  const fontPreview = document.getElementById('theme-font-preview');
+  if (fontPreview) fontPreview.style.fontFamily = theme.font || (isNightStudy
+    ? "'Gowun Batang', 'Batang', serif"
+    : "'Pretendard Variable', 'Malgun Gothic', sans-serif");
 
   root.setProperty('--calendar-date-font-size', `${theme.dateFontSize || DARK_DEFAULTS.dateFontSize}px`);
   root.setProperty('--calendar-event-font-size', `${theme.eventFontSize || DARK_DEFAULTS.eventFontSize}px`);
 
   document.body.setAttribute('data-bold', theme.bold ? 'true' : 'false');
   document.body.setAttribute('data-card-style', theme.cardStyle || 'glass');
+  window.journalWorlds?.setTheme(theme);
+  window.storybookUI?.applyTheme(theme);
 }

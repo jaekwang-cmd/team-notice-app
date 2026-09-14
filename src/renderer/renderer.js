@@ -113,6 +113,20 @@ let currentHolidayMap = new Map();
 let currentGridStart = null;
 
 const MAX_EVENT_LINES = 4;
+const CALENDAR_WEEK_BASE_HEIGHT = 42;
+const CALENDAR_EVENT_ROW_HEIGHT = 24;
+const CALENDAR_MORE_ROW_HEIGHT = 16;
+const CALENDAR_MIN_WEEK_HEIGHT = 92;
+
+function calendarWeekMinHeight(trackCount, eventCount) {
+  const bannerHeight = Math.max(0, trackCount) * (EVENT_BANNER_HEIGHT + EVENT_BANNER_GAP);
+  const visibleCount = Math.min(Math.max(0, eventCount), MAX_EVENT_LINES);
+  const moreHeight = eventCount > MAX_EVENT_LINES ? CALENDAR_MORE_ROW_HEIGHT : 0;
+  return Math.max(
+    CALENDAR_MIN_WEEK_HEIGHT,
+    CALENDAR_WEEK_BASE_HEIGHT + bannerHeight + visibleCount * CALENDAR_EVENT_ROW_HEIGHT + moreHeight,
+  );
+}
 
 // 날짜를 클릭할 때마다 42칸을 통째로 새로 그리면(특히 여러 번 빠르게 누를 때) 버벅이면서
 // 다른 입력칸(메모/AI 채팅) 타이핑까지 같이 씹히는 느낌이 났다 — 선택된 날짜 표시(.selected
@@ -180,6 +194,20 @@ function buildCalendarGrid() {
   const todayStr = toDateStr(today);
   calendarGrid.innerHTML = '';
   const weekBanners = computeWeekBanners(currentGridStart, multiDayEvents);
+
+  // 일정이 많은 주는 필요한 만큼 높이고, 창보다 길어지면 .calendar-main이 스크롤한다.
+  // 모든 주를 무조건 크게 만들지 않아 한산한 달은 기존 밀도를 그대로 유지한다.
+  const weekHeights = weekBanners.map((week, weekIndex) => {
+    let busiestDayEventCount = 0;
+    for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
+      const date = new Date(currentGridStart);
+      date.setDate(currentGridStart.getDate() + weekIndex * 7 + dayIndex);
+      busiestDayEventCount = Math.max(busiestDayEventCount, (eventsByDate.get(toDateStr(date)) || []).length);
+    }
+    return calendarWeekMinHeight(week.trackCount, busiestDayEventCount);
+  });
+  calendarGrid.style.minHeight = `${weekHeights.reduce((sum, height) => sum + height, 0)}px`;
+  calendarGrid.style.gridTemplateRows = weekHeights.map((height) => `minmax(${height}px, 1fr)`).join(' ');
 
   for (let i = 0; i < 42; i += 1) {
     const cellDate = new Date(currentGridStart);
@@ -255,6 +283,7 @@ function buildCalendarGrid() {
         const line = document.createElement('span');
         line.className = 'event-line';
         line.textContent = ev.title;
+        line.title = ev.title;
         const color = EVENT_COLOR_BY_ID.get(ev.colorId);
         if (color) {
           line.style.background = color.hex;
@@ -291,15 +320,20 @@ function buildCalendarGrid() {
 }
 
 async function renderCalendar() {
-  calendarTitle.textContent = `${viewYear}년 ${viewMonth + 1}월`;
+  calendarGrid.setAttribute('aria-busy', 'true');
+  try {
+    calendarTitle.textContent = `${viewYear}년 ${viewMonth + 1}월`;
 
-  const holidays = await getHolidays(viewYear);
-  currentHolidayMap = new Map(holidays.map((h) => [h.date, h.name]));
+    const holidays = await getHolidays(viewYear);
+    currentHolidayMap = new Map(holidays.map((h) => [h.date, h.name]));
 
-  currentGridStart = startOfGrid(viewYear, viewMonth);
-  await loadGoogleEventsForGrid(currentGridStart);
+    currentGridStart = startOfGrid(viewYear, viewMonth);
+    await loadGoogleEventsForGrid(currentGridStart);
 
-  buildCalendarGrid();
+    buildCalendarGrid();
+  } finally {
+    calendarGrid.setAttribute('aria-busy', 'false');
+  }
 }
 
 function updateNoticeInputState() {
@@ -632,9 +666,18 @@ function renderEventColorSwatches() {
     btn.className = 'event-color-swatch' + (c.id === selectedEventColorId ? ' selected' : '');
     btn.style.background = c.hex;
     btn.title = c.name;
+    btn.dataset.colorId = c.id;
+    btn.setAttribute('aria-label', c.name);
+    btn.setAttribute('aria-pressed', String(c.id === selectedEventColorId));
     btn.onclick = () => {
       selectedEventColorId = selectedEventColorId === c.id ? null : c.id; // 다시 누르면 선택 해제
-      renderEventColorSwatches();
+      // Keep the clicked node attached: replacing it during bubbling made the
+      // document-level outside-click handler mistake this for a click outside.
+      eventColorSwatchesEl.querySelectorAll('.event-color-swatch').forEach((swatch) => {
+        const selected = swatch.dataset.colorId === selectedEventColorId;
+        swatch.classList.toggle('selected', selected);
+        swatch.setAttribute('aria-pressed', String(selected));
+      });
     };
     eventColorSwatchesEl.appendChild(btn);
   });
@@ -666,7 +709,7 @@ setCalendarOnly(localStorage.getItem(CALENDAR_ONLY_KEY) === '1');
 document.addEventListener('click', (e) => {
   if (!calendarRow.classList.contains('calendar-only')) return;
   if (!dayPanel.classList.contains('floating')) return;
-  if (dayPanel.contains(e.target)) return;
+  if (e.composedPath().includes(dayPanel) || dayPanel.contains(e.target)) return;
   if (e.target.closest('.day-cell')) return;
   document.getElementById('day-panel-close').click();
 });
@@ -868,8 +911,7 @@ eventForm.addEventListener('submit', async (e) => {
 });
 
 async function refreshEventsAndDayPanel() {
-  const gridStart = startOfGrid(viewYear, viewMonth);
-  await loadGoogleEventsForGrid(gridStart);
+  // renderCalendar already loads the current grid's events.
   await renderCalendar();
   if (selectedDateStr) renderDayEventList();
 }
@@ -1530,6 +1572,43 @@ document.querySelectorAll('input[name="theme-mode"]').forEach((radio) => {
   });
 });
 
+// Quick theme selection uses the same saved theme as Settings and the tasks widget.
+const journalThemeSelect = document.getElementById('journal-theme-select');
+if (journalThemeSelect) {
+  [...THEME_PRESET_META, { id: 'custom', label: '사용자 설정' }].forEach(meta => {
+    const option = document.createElement('option');
+    option.value = meta.id;
+    option.textContent = meta.label;
+    journalThemeSelect.appendChild(option);
+  });
+  journalThemeSelect.addEventListener('change', async () => {
+    const mode = journalThemeSelect.value;
+    if (mode === 'custom') {
+      applyTheme(lastSavedTheme);
+      try { await document.getElementById('btn-settings').onclick(); }
+      catch (_) { showToast('설정을 열지 못했습니다. 다시 시도해주세요.'); }
+      return;
+    }
+    const preset = THEME_PRESETS[mode];
+    if (!preset) return;
+    journalThemeSelect.disabled = true;
+    let previous = lastSavedTheme;
+    try {
+      previous = await window.api.getTheme();
+      const theme = { ...previous, ...preset, mode,
+        dateFontSize: previous.dateFontSize || preset.dateFontSize,
+        eventFontSize: previous.eventFontSize || preset.eventFontSize };
+      await window.api.setTheme(theme);
+      lastSavedTheme = theme;
+      applyTheme(theme);
+      fillThemeInputs(theme);
+    } catch (_) {
+      if (previous) applyTheme(previous);
+      showToast('테마를 저장하지 못했습니다. 다시 선택해주세요.');
+    } finally { journalThemeSelect.disabled = false; }
+  });
+}
+
 document.querySelectorAll('input[name="card-style"]').forEach((radio) => {
   radio.addEventListener('change', () => applyTheme(currentThemeFromForm()));
 });
@@ -2024,13 +2103,50 @@ document.getElementById('force-update-btn').addEventListener('click', () => {
   document.getElementById('app-version-badge').click();
 });
 
-async function chulgoUpdateField(id, key, value) {
-  try {
-    await window.api.updateChulgoEntry({ id, [key]: value });
-  } catch (err) {
-    console.error('출고 건 수정 실패:', err);
-    showToast(chulgoFriendlyError(err));
-  }
+// 같은 행을 빠르게 여러 번 고칠 때 Firestore 쓰기가 서로 앞질러 가지 않도록 행별로
+// 직렬화한다. 아직 저장 중인 값은 스냅샷 위에 합쳐서 서버 응답이 입력칸을 이전 값으로
+// 되돌리는 일도 막는다.
+const chulgoWriteTails = new Map();
+const chulgoPendingPatches = new Map();
+
+function chulgoUpdateFields(id, patch) {
+  if (!id || !patch || !Object.keys(patch).length) return Promise.resolve();
+  const optimistic = chulgoPendingPatches.get(id) || {};
+  Object.assign(optimistic, patch);
+  chulgoPendingPatches.set(id, optimistic);
+
+  const previous = chulgoWriteTails.get(id) || Promise.resolve();
+  const task = previous.catch(() => {}).then(async () => {
+    try {
+      await window.api.updateChulgoEntry({ id, ...patch });
+      const pending = chulgoPendingPatches.get(id);
+      if (pending) {
+        for (const [key, value] of Object.entries(patch)) {
+          if (pending[key] === value) delete pending[key];
+        }
+        if (!Object.keys(pending).length) chulgoPendingPatches.delete(id);
+      }
+    } catch (err) {
+      const pending = chulgoPendingPatches.get(id);
+      if (pending) {
+        for (const [key, value] of Object.entries(patch)) {
+          if (pending[key] === value) delete pending[key];
+        }
+        if (!Object.keys(pending).length) chulgoPendingPatches.delete(id);
+      }
+      console.error('출고 건 수정 실패:', err);
+      showToast(chulgoFriendlyError(err));
+    }
+  });
+  chulgoWriteTails.set(id, task);
+  task.finally(() => {
+    if (chulgoWriteTails.get(id) === task) chulgoWriteTails.delete(id);
+  }).catch(() => {});
+  return task;
+}
+
+function chulgoUpdateField(id, key, value) {
+  return chulgoUpdateFields(id, { [key]: value });
 }
 
 function renderChulgo() {
@@ -2130,7 +2246,8 @@ function renderChulgo() {
       const entry = chulgoEntries.find((x) => x.id === id);
       if (entry) entry[key] = value; // optimistic local update — Firestore snapshot reconciles right after
       if (el.tagName === 'SELECT') {
-        el.className = value === '완료' ? 'chulgo-status-완료' : value === '예정' ? 'chulgo-status-예정' : '';
+        el.classList.toggle('chulgo-status-완료', value === '완료');
+        el.classList.toggle('chulgo-status-예정', value === '예정');
       }
       const row = el.closest('tr');
       const computedCell = row && row.querySelector('td.chulgo-computed');
@@ -2243,8 +2360,7 @@ function renderChulgo() {
       if (entry) { entry.recognizedUnits = n; entry.countsQuota = true; }
       renderChulgoStats();
       chulgoActiveMonthCount.textContent = `${list.length}건 (인정 ${chulgoCountedUnits(list)}대)`;
-      chulgoUpdateField(id, 'recognizedUnits', n);
-      chulgoUpdateField(id, 'countsQuota', true);
+      chulgoUpdateFields(id, { recognizedUnits: n, countsQuota: true });
     });
   });
 
@@ -3880,11 +3996,12 @@ chulgoPhoneInput.addEventListener('change', async () => {
 // 다시 그리는 순간 그 입력칸이 파괴돼서 글자가 씹히고 커서가 사라진다. 그럴 땐 다시
 // 그리기를 미뤄놨다가, 입력칸에서 손을 떼는 순간(blur) 반영한다.
 let chulgoRenderDeferred = false;
+let chulgoPointerActive = false;
 
 function chulgoIsEditing() {
   const active = document.activeElement;
-  return !!active && chulgoTableWrap.contains(active)
-    && (active.tagName === 'INPUT' || active.tagName === 'SELECT' || active.tagName === 'TEXTAREA');
+  return chulgoPointerActive || (!!active && chulgoTableWrap.contains(active)
+    && (active.tagName === 'INPUT' || active.tagName === 'SELECT' || active.tagName === 'TEXTAREA'));
 }
 
 function chulgoRenderWhenIdle() {
@@ -3907,9 +4024,19 @@ chulgoTableWrap.addEventListener('focusout', () => {
   }, 0);
 });
 
+// 마우스를 누르는 찰나에 스냅샷이 오면 아직 focus가 생기기 전이라 기존 검사만으로는
+// 표가 교체될 수 있다. 포인터 동작이 끝날 때까지도 같은 방식으로 렌더를 미룬다.
+chulgoTableWrap.addEventListener('pointerdown', () => { chulgoPointerActive = true; });
+window.addEventListener('pointerup', () => {
+  if (!chulgoPointerActive) return;
+  chulgoPointerActive = false;
+  if (chulgoRenderDeferred) chulgoRenderWhenIdle();
+});
+
 window.api.onChulgoUpdate((entries) => {
-  const changed = !chulgoEntriesEqual(entries, chulgoEntries);
-  chulgoEntries = entries;
+  const reconciled = entries.map((entry) => ({ ...entry, ...(chulgoPendingPatches.get(entry.id) || {}) }));
+  const changed = !chulgoEntriesEqual(reconciled, chulgoEntries);
+  chulgoEntries = reconciled;
   if (!chulgoPanel.classList.contains('hidden')) {
     // Skip the full table rebuild when nothing actually differs from what's already on screen —
     // this is what was making clicks/typing need a double-click: a Firestore round-trip echoing
@@ -4342,12 +4469,14 @@ function orgMatchesSearch(m) {
 function orgMemberCardHTML(m) {
   const team = orgTeamsCache.find((t) => t.id === m.teamId);
   return `
-    <div class="org-member-card${m.active ? '' : ' inactive'}" data-uid="${m.uid}">
-      <div>
-        <div class="org-member-name">${escapeHtml(m.name || '(이름 미설정)')}</div>
-        <div class="org-member-position">${escapeHtml(m.position || '-')}${m.active ? '' : ' · 비활성'}</div>
-      </div>
-    </div>
+    <button type="button" class="org-member-card${m.active ? '' : ' inactive'}" data-uid="${escapeHtml(m.uid)}">
+      <span class="org-member-avatar" aria-hidden="true">${escapeHtml((m.name || '?').slice(0, 1))}</span>
+      <span class="org-member-copy">
+        <span class="org-member-name">${escapeHtml(m.name || '(이름 미설정)')}</span>
+        <span class="org-member-position">${escapeHtml(m.position || '-')}${m.active ? '' : ' · 비활성'}</span>
+      </span>
+      <span class="org-member-chevron" aria-hidden="true">›</span>
+    </button>
     <div class="org-member-detail" data-detail-for="${m.uid}">
       이메일: ${escapeHtml(m.email)}<br>
       소속: ${escapeHtml(orgLabelOf(m.organization))} ${team ? '· ' + escapeHtml(team.teamName) : ''}<br>
@@ -4387,6 +4516,7 @@ function renderOrgChart() {
     head.className = 'org-unit-head';
     head.innerHTML = `
       <span class="org-unit-title">${escapeHtml(org.label)}</span>
+      <span class="org-unit-meta">${orgMembers.length}명 · ${orgTeamsHere.length}개 팀</span>
       <span class="org-unit-manager${topManager ? '' : ' vacant'}" data-vacant-org="${org.key}" data-vacant-position="${topPosition}">
         ${topManager ? `${escapeHtml(topManager.name)} ${escapeHtml(topPosition)}` : `${topPosition} 공석${canEdit ? ' (클릭해서 배정)' : ''}`}
       </span>`;
@@ -4406,10 +4536,10 @@ function renderOrgChart() {
       card.innerHTML = `
         <div class="org-team-card-head">
           <span class="org-team-card-title">${escapeHtml(team.teamName)}</span>
-          ${canEdit ? `<button type="button" class="org-team-edit-btn" data-edit-team="${team.id}">✎</button>` : ''}
+          ${canEdit ? `<button type="button" class="org-team-edit-btn" data-edit-team="${team.id}" aria-label="${escapeHtml(team.teamName)} 수정">✎</button>` : ''}
         </div>
         <div class="org-team-manager${manager ? '' : ' vacant'}" data-vacant-team="${team.id}">
-          ${manager ? `👑 ${escapeHtml(manager.name)} ${escapeHtml(manager.position)}` : `팀장 공석${canEdit ? ' (클릭해서 배정)' : ''}`}
+          ${manager ? `<span class="org-lead-role">팀장</span> ${escapeHtml(manager.name)}` : `팀장 공석${canEdit ? ' · 배정하기' : ''}`}
         </div>
         <div class="org-team-members"></div>`;
       const membersWrap = card.querySelector('.org-team-members');
@@ -4432,7 +4562,7 @@ function renderOrgChart() {
       const block = document.createElement('div');
       block.className = 'org-unit-block';
       block.id = 'org-unassigned-block';
-      block.innerHTML = `<div class="org-unit-head"><span class="org-unit-title">🟡 미배정 계정 (${unassigned.length})</span></div>
+      block.innerHTML = `<div class="org-unit-head"><span class="org-unit-title">미배정 계정</span><span class="org-unit-meta">${unassigned.length}명</span></div>
         <div class="org-team-card" style="max-width:none"><div class="org-team-members"></div></div>`;
       const membersWrap = block.querySelector('.org-team-members');
       unassigned.forEach((m) => {
@@ -4912,6 +5042,7 @@ const COMPARE_INFO_FIELDS = [
 const COMPARE_SHEET_COUNT = 2;
 const COMPARE_COMPANIES_KEY = 'compare_companies_v1';
 const COMPARE_SHEETS_KEY = 'compare_sheets_v1';
+const COMPARE_HIDDEN_SHEET_KEY = 'compare_hidden_sheet_v1';
 const COMPARE_WINDOW_SIZE_KEY = 'compare_window_size_v1';
 const COMPARE_DEFAULT_WINDOW_SIZE = { width: 1728, height: 900 };
 
@@ -4977,6 +5108,32 @@ function compareSaveSheets() { compareSaveJSON(COMPARE_SHEETS_KEY, compareSheets
 // 표 전체(두 시트 모두)를 매 키 입력마다 JSON.stringify + localStorage.setItem 하면
 // 타이핑할 때마다 버벅인다 — 입력이 잠깐 멈췄을 때만 실제로 저장한다.
 const compareSaveSheetsDebounced = debounce(compareSaveSheets, 300);
+
+// Visibility is a local preference, separate from both sheets' financial data.
+let compareHiddenSheet = compareLoadJSON(COMPARE_HIDDEN_SHEET_KEY);
+if (compareHiddenSheet !== 0 && compareHiddenSheet !== 1) compareHiddenSheet = null;
+function compareApplyVisibility() {
+  comparePanel.querySelector('.compare-sheets-row').dataset.singleSheet = String(compareHiddenSheet !== null);
+  comparePanel.querySelectorAll('[data-compare-toggle]').forEach(button => {
+    const idx = Number(button.dataset.compareToggle);
+    const hidden = compareHiddenSheet === idx;
+    document.getElementById(`compare-sheet-${idx}`).hidden = hidden;
+    button.setAttribute('aria-expanded', String(!hidden));
+    button.textContent = `${idx + 1}번 시트 ${hidden ? '펼치기' : '접기'}`;
+    button.title = hidden ? `${idx + 1}번 시트 다시 보기`
+      : compareHiddenSheet !== null ? `${idx + 1}번 시트를 접고 ${compareHiddenSheet + 1}번 시트 보기` : `${idx + 1}번 시트 접어두기`;
+  });
+}
+comparePanel.querySelectorAll('[data-compare-toggle]').forEach(button => {
+  button.addEventListener('click', () => {
+    compareSaveSheets(); // Flush any pending input before hiding; do not rebuild the inputs.
+    const idx = Number(button.dataset.compareToggle);
+    compareHiddenSheet = compareHiddenSheet === idx ? null : idx;
+    compareSaveJSON(COMPARE_HIDDEN_SHEET_KEY, compareHiddenSheet);
+    compareApplyVisibility();
+  });
+});
+compareApplyVisibility();
 
 function compareWon(n) {
   const v = Number(n);
@@ -5085,13 +5242,16 @@ function compareRenderSheet(idx) {
   const infoFieldsHTML = COMPARE_INFO_FIELDS.map(({ key, label }) => `
     <label class="compare-info-field">
       <span>${label}</span>
-      <input type="text" class="compare-info-input" data-field="${key}" value="${compareEsc(sheet.info[key] || '')}" maxlength="30">
+      <input type="text" class="compare-info-input" data-field="${key}" value="${compareEsc(sheet.info[key] || '')}" placeholder="${compareEsc(label)} 입력" maxlength="30">
     </label>`).join('');
 
   el.innerHTML = `
+    <div class="compare-sheet-heading">
+      <div class="compare-sheet-label"><span class="compare-sheet-number" aria-hidden="true">0${idx + 1}</span><div><span class="workspace-eyebrow">COMPARISON</span><h4>${idx + 1}번 시트</h4></div></div>
+      <button type="button" class="compare-reset-btn" title="월 납입금·잔존가치 초기화">↺ 초기화</button>
+    </div>
     <div class="compare-sheet-top">
       <div class="compare-info-row">${infoFieldsHTML}</div>
-      <button type="button" class="compare-reset-btn" title="월 납입금·잔존가치 초기화">↺ 초기화</button>
     </div>
     <div class="compare-months-bar">
       <span class="compare-months-label">계약기간</span>
@@ -5100,6 +5260,7 @@ function compareRenderSheet(idx) {
     <div class="compare-body">
       <div class="compare-table-scroll">
         <table class="compare-table">
+          <caption class="compare-table-caption">${compareCompanies.length}개 금융사 · 금액 단위 원</caption>
           <thead>
             <tr><th>금융사</th><th>월 납입금</th><th>잔존가치</th><th>계약기간</th><th>총 인수비용</th></tr>
           </thead>
@@ -5239,8 +5400,9 @@ const AI_DEFAULT_WINDOW_SIZE = { width: 900, height: 760 };
 
 const memoPanel = document.getElementById('memo-panel');
 const aiPanel = document.getElementById('ai-panel');
-const VIEW_PANES = { calendar: appContentEl, memo: memoPanel, ai: aiPanel, chulgo: chulgoPanel, reminder: reminderPanel, compare: comparePanel, org: orgPanel, finance: financePanel };
+const VIEW_PANES = { journal: document.getElementById('journal-panel'), calendar: appContentEl, memo: memoPanel, ai: aiPanel, chulgo: chulgoPanel, reminder: reminderPanel, compare: comparePanel, org: orgPanel, finance: financePanel };
 const VIEW_WINDOW_SIZE = {
+  journal: { key: 'journal_window_size_v1', default: null },
   calendar: { key: CALENDAR_WINDOW_SIZE_KEY, default: null },
   memo: { key: MEMO_WINDOW_SIZE_KEY, default: MEMO_DEFAULT_WINDOW_SIZE },
   ai: { key: AI_WINDOW_SIZE_KEY, default: AI_DEFAULT_WINDOW_SIZE },
@@ -5273,6 +5435,8 @@ async function switchView(name) {
   VIEW_PANES[prevView].classList.add('hidden');
   VIEW_PANES[name].classList.remove('hidden');
   currentView = name;
+  window.journalWorlds?.setView(name);
+  if (name === 'journal') window.journalUI.render();
   document.querySelectorAll('.sidebar-nav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.view === name);
   });
@@ -5316,12 +5480,13 @@ document.getElementById('whats-new-close').addEventListener('click', async () =>
   // 정품 앱과 개발 모드 창이 똑같이 생겨서 여러 모니터에 켜두면 어느 게 개발 모드인지
   // 구분이 안 됐다 — 제목에 "(dev)"를 붙여서 한눈에 알아볼 수 있게 한다.
   if (await window.api.getIsDev()) {
-    document.title = '스케줄 캘린더 (dev)';
+    document.title = '여백 (dev)';
     const titleEl = document.querySelector('.app-title');
-    if (titleEl) titleEl.textContent = '🗓️ 스케줄 캘린더 (dev)';
+    if (titleEl) titleEl.textContent = '여백 (dev)';
   }
 
-  const theme = await window.api.getTheme();
+  const theme = await window.journalUI.loadTheme();
+  lastSavedTheme = theme;
   applyTheme(theme);
 
   // 방금 업데이트돼서 새로 켜진 거면, 뭐가 바뀌었는지 다른 무엇보다 먼저 보여준다.
@@ -5348,4 +5513,9 @@ document.getElementById('whats-new-close').addEventListener('click', async () =>
   updateNoticeInputState();
   renderMemos();
   await renderCalendar();
+  window.journalUI.start();
+  await switchView('journal');
+  window.yeobaekReady = true;
+  window.dispatchEvent(new Event('yeobaek-ready'));
+  window.storybookUI?.start();
 })();

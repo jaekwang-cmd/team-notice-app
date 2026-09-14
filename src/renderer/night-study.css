@@ -1,0 +1,136 @@
+/* Optional notebook presentation. Calendar grid, day editor and ledger layout stay in their existing components. */
+.journal-day-number{display:none}
+.journal-theme-picker{display:flex;align-items:center;gap:7px;flex-shrink:0;color:var(--color-text-secondary);font-size:11px;-webkit-app-region:no-drag}
+.journal-theme-picker select{font:inherit;color:var(--color-text-primary);background:var(--color-panel-bg);border:1px solid var(--color-border);border-radius:5px;padding:6px 8px;max-width:146px;cursor:pointer}
+.journal-theme-picker select:disabled{opacity:.6;cursor:wait}
+.theme-preset-card:has(input[value='nightStudy']) .theme-preset-swatch{background:#39312b!important;border:1px solid #54483c}
+.theme-preset-card:has(input[value='nightStudy']) .theme-preset-swatch span:first-child{background:#f5f0e6!important}
+.theme-preset-card:has(input[value='nightStudy']) .theme-preset-swatch span:last-child{background:#58634e!important}
+
+body[data-journal-theme='nightStudy']{
+  color-scheme:light;
+  --study-desk:#39312b;--study-rail:#2d2723;--study-rail-line:#54483c;
+  --study-brass:#c3a676;--study-chrome-text:#e2d6c3;--study-chrome-muted:#b6a896;
+  --study-page-right:color-mix(in srgb,var(--color-panel-bg) 88%,#ded0b7);
+  --radius-sm:6px;--radius-md:10px;--radius-lg:12px;--radius-xl:14px;
+  --shadow-card:0 2px 8px #261f1914;--shadow-pop:0 16px 40px #2119103b;
+}
+body[data-journal-theme='nightStudy'] .app-bg{background:var(--study-desk);border-color:var(--study-rail-line);border-radius:10px}
+body[data-journal-theme='nightStudy'] .app-main-col{background:radial-gradient(ellipse at 90% 0,#b5915320,transparent 60%),var(--study-desk)}
+body[data-journal-theme='nightStudy'] .app-sidebar{
+  position:relative;background:var(--study-rail);border-right:1px solid var(--study-rail-line);
+  --color-text-primary:var(--study-chrome-text);--color-text-secondary:var(--study-chrome-muted);--color-divider:var(--study-rail-line);
+}
+body[data-journal-theme='nightStudy'] .app-sidebar:before{content:'';position:absolute;left:7px;top:12px;bottom:12px;border-left:1px dashed var(--study-rail-line);pointer-events:none}
+body[data-journal-theme='nightStudy'] .journal-brand{padding-top:22px;padding-bottom:38px}
+body[data-journal-theme='nightStudy'] .journal-brand-mark{color:var(--study-brass);opacity:1;border-radius:2px 5px 5px 2px}
+body[data-journal-theme='nightStudy'] .sidebar-nav-btn{position:relative}
+body[data-journal-theme='nightStudy'] .sidebar-nav-btn:hover{background:#40372e;color:var(--study-chrome-text)}
+body[data-journal-theme='nightStudy'] .sidebar-nav-btn.active{background:#4a4034;color:var(--study-chrome-text)}
+body[data-journal-theme='nightStudy'] .sidebar-nav-btn.active:after{content:'';width:4px;height:4px;background:var(--study-brass);border-radius:50%;margin-left:auto;flex-shrink:0}
+body[data-journal-theme='nightStudy'] .journal-avatar{background:transparent;border:1px solid var(--study-rail-line);color:var(--study-brass)}
+body[data-journal-theme='nightStudy'] .titlebar{
+  --color-text-primary:var(--study-chrome-text);--color-text-secondary:var(--study-chrome-muted);--color-divider:var(--study-rail-line);
+  --color-border:var(--study-rail-line);--color-panel-bg:var(--study-rail);--color-input-bg:var(--study-rail);color:var(--study-chrome-text);
+}
+body[data-journal-theme='nightStudy'] .titlebar :is(.titlebar-shortcut-btn,.window-controls button,.app-version-badge):hover{background:#4a4034;filter:none}
+body[data-journal-theme='nightStudy'] .titlebar #btn-close:hover{background:#a34940}
+body[data-journal-theme='nightStudy'] .titlebar .window-controls button.active{background:#58634e}
+body[data-journal-theme='nightStudy'] .glass-card,body[data-journal-theme='nightStudy'][data-card-style] .glass-card{
+  background:var(--color-panel-bg);border:1px solid var(--color-border);border-radius:6px 8px 8px 6px;
+  box-shadow:0 3px 0 -1px #cbbda5,0 6px 0 -2px #9a8b76,0 18px 30px -16px #0b080950;backdrop-filter:none;-webkit-backdrop-filter:none;
+}
+/* Calendar dimensions, event colors, week count, spanning events and floating editor are not overridden. */
+body[data-journal-theme='nightStudy'] .calendar-card{padding:10px 4px}
+body[data-journal-theme='nightStudy'] .calendar-row.calendar-only .day-panel.floating{background:var(--color-panel-bg);backdrop-filter:none;-webkit-backdrop-filter:none;border:1px solid var(--color-border)}
+body[data-journal-theme='nightStudy'] .journal-page{
+  display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);grid-template-rows:auto auto auto auto auto;align-content:start;
+  column-gap:66px;padding:26px 34px 22px;position:relative;isolation:isolate;scrollbar-gutter:stable;max-width:1180px;
+  background:linear-gradient(90deg,transparent 52.7%,#b3a08020 53.5%,#9b866323 53.6%,transparent 54.5%),linear-gradient(90deg,var(--color-panel-bg) 53.5%,var(--study-page-right) 53.5%);
+  border:1px solid var(--color-border);border-radius:6px 8px 8px 6px;box-shadow:0 3px 0 -1px #cbbda5,0 6px 0 -2px #9a8b76,0 22px 30px -15px #0b080950;
+}
+body[data-journal-theme='nightStudy'] .journal-eyebrow{grid-column:1/-1;grid-row:1;margin:0 0 28px;align-items:center;font-size:11px}
+body[data-journal-theme='nightStudy'] .journal-eyebrow>span:last-child{font-size:10px;letter-spacing:1.5px}
+body[data-journal-theme='nightStudy'] .journal-heading{grid-column:1;grid-row:2;display:flex;flex-wrap:wrap;gap:17px;margin-bottom:20px;align-items:flex-start}
+body[data-journal-theme='nightStudy'] .journal-date-copy{display:flex;align-items:center;gap:20px;min-width:0}
+body[data-journal-theme='nightStudy'] .journal-day-number{display:block;flex-shrink:0;font-family:var(--journal-serif);font-size:70px;font-weight:400;line-height:1.15;letter-spacing:-5px}
+body[data-journal-theme='nightStudy'] .journal-date-copy>div{border-left:1px solid var(--color-divider);padding-left:18px;min-width:0}
+body[data-journal-theme='nightStudy'] .journal-heading h1{font-size:24px;letter-spacing:-.7px;line-height:1.6}
+body[data-journal-theme='nightStudy'] .journal-heading p{font-size:11px;line-height:1.8;margin-top:5px}
+body[data-journal-theme='nightStudy'] .journal-heading-actions{margin-left:auto;flex-wrap:wrap}
+body[data-journal-theme='nightStudy'] .journal-heading-actions .btn{font-size:11px;min-height:30px;box-shadow:none}
+body[data-journal-theme='nightStudy'] .journal-week-nav{grid-column:1;grid-row:3;gap:6px;margin-bottom:24px;padding-bottom:20px}
+body[data-journal-theme='nightStudy'] .journal-week{gap:4px}
+body[data-journal-theme='nightStudy'] .journal-week button{border-radius:22px;padding:9px 2px;gap:4px}
+body[data-journal-theme='nightStudy'] .journal-week button strong{font-family:var(--journal-serif);font-size:20px}
+body[data-journal-theme='nightStudy'] .journal-week button[aria-pressed='true']{background:var(--color-accent);color:var(--color-button-text);box-shadow:none}
+body[data-journal-theme='nightStudy'] .journal-week button[aria-pressed='true'] span{color:inherit}
+body[data-journal-theme='nightStudy'] .journal-week button[aria-pressed='true'] i.has-events{background:currentColor}
+body[data-journal-theme='nightStudy'] .journal-spread{display:contents}
+body[data-journal-theme='nightStudy'] .journal-spread>section{grid-column:1;grid-row:4;min-width:0}
+body[data-journal-theme='nightStudy'] .journal-section-title{font-family:var(--journal-serif);font-size:21px;font-weight:400;flex-wrap:wrap;gap:5px;margin-bottom:16px}
+body[data-journal-theme='nightStudy'] .journal-section-title>span{font-family:var(--font-family);font-size:11px}
+body[data-journal-theme='nightStudy'] .journal-sidepage{grid-column:2;grid-row:2/5;border:0;padding:12px 0 0;display:flex;flex-direction:column;position:relative;min-width:0}
+body[data-journal-theme='nightStudy'] .journal-sidepage:before{content:'';position:absolute;right:8px;top:-55px;width:20px;height:54px;background:linear-gradient(90deg,transparent 4px,#ffffff20 4px,#ffffff20 5px,transparent 5px),var(--color-accent);clip-path:polygon(0 0,100% 0,100% 100%,50% 84%,0 100%);pointer-events:none}
+body[data-journal-theme='nightStudy'] .journal-notes-block{order:1}
+body[data-journal-theme='nightStudy'] .journal-note-title{margin:0 0 17px}
+body[data-journal-theme='nightStudy'] .journal-note{font-family:var(--journal-note-font,var(--font-family));font-size:var(--journal-note-size,22px);line-height:33px;min-height:198px;background:repeating-linear-gradient(transparent,transparent 32px,var(--color-divider) 32px,var(--color-divider) 33px);color:var(--color-text-primary)}
+body[data-journal-theme='nightStudy'] .journal-note::placeholder{font-family:var(--journal-note-font,var(--font-family));color:var(--color-text-secondary)}
+body[data-journal-theme='nightStudy'] .journal-note-actions{margin-top:9px;flex-wrap:wrap}
+body[data-journal-theme='nightStudy'] .journal-tasks-block{order:2;border-top:1px solid var(--color-divider);margin-top:23px;padding-top:22px}
+body[data-journal-theme='nightStudy'] .journal-assistant{order:3;margin-top:22px;padding-top:20px}
+body[data-journal-theme='nightStudy'] .journal-assistant p{font-size:11px}
+body[data-journal-theme='nightStudy'] .journal-quick-form{padding:9px 11px;background:var(--color-input-bg);border-radius:5px}
+body[data-journal-theme='nightStudy'] .journal-quick-options{gap:8px}
+body[data-journal-theme='nightStudy'] .journal-quick-hint{font-size:11px}
+body[data-journal-theme='nightStudy'] #journal-timeline .journal-event-row{border-bottom:0;position:relative;column-gap:17px}
+body[data-journal-theme='nightStudy'] #journal-timeline .journal-event-card{position:relative;padding-left:13px}
+body[data-journal-theme='nightStudy'] #journal-timeline .journal-event-card:before{content:'';position:absolute;left:-1px;top:25px;width:5px;height:5px;background:var(--color-accent);border-radius:50%}
+body[data-journal-theme='nightStudy'] #journal-timeline .journal-event-row:not(:last-child):after{content:'';position:absolute;left:64px;top:34px;bottom:-13px;width:1px;background:var(--color-divider);pointer-events:none}
+body[data-journal-theme='nightStudy'] .journal-footer{grid-column:1/-1;grid-row:5;margin-top:27px;padding-top:13px;font-size:10px}
+/* Keep dense financial tables readable while matching the new paper and accent. */
+body[data-journal-theme='nightStudy'] :is(#chulgo-panel,#settings-panel){
+  --color-app-bg:#f5f0e6;--color-panel-bg:#f5f0e6;--color-panel-tint-light:#faf7ef;--color-panel-tint-dark:#e6dece;
+  --color-text-primary:#3d382f;--color-text-secondary:#7a7163;--color-border:#d5c9b5;--color-divider:#dcd3c2;
+  --color-accent:#58634e;--color-accent-2:#47533d;--color-input-bg:#fbf8f1;--color-button-bg:#58634e;--color-button-text:#fffaf0;--color-secondary-button-bg:#e6e8da;
+}
+body[data-journal-theme='nightStudy'] #chulgo-panel .glass-card{background:var(--color-panel-bg)!important;border:1px solid var(--color-border)!important;border-radius:8px!important;box-shadow:none!important}
+body[data-journal-theme='nightStudy'] .chulgo-ledger{--color-accent:#58634e;--color-border:#d5c9b5;--color-divider:#dcd3c2}
+body[data-journal-theme='nightStudy'] .chulgo-ledger th{background:#eae4d6;color:#4f5546}
+body[data-journal-theme='nightStudy'] .chulgo-ledger td{border-color:#dcd3c2}
+body[data-journal-theme='nightStudy'] .chulgo-ledger tbody tr.selected td{background:#e6e8da}
+body[data-journal-theme='nightStudy'] :is(#org-member-popup,#org-team-popup) .org-dialog{background:var(--color-panel-bg)}
+
+@media(max-width:1200px){
+  body[data-journal-theme='nightStudy'] .journal-page{column-gap:46px;padding:24px 25px}
+  body[data-journal-theme='nightStudy'] .journal-heading h1{font-size:21px}
+  body[data-journal-theme='nightStudy'] .journal-date-copy{gap:12px}
+  body[data-journal-theme='nightStudy'] .journal-date-copy>div{padding-left:12px}
+  body[data-journal-theme='nightStudy'] .journal-day-number{font-size:61px}
+  body[data-journal-theme='nightStudy'] .journal-section-title{font-size:19px}
+  .titlebar{flex-wrap:wrap}
+}
+@media(max-width:1000px){
+  body[data-journal-theme='nightStudy'] .journal-page{display:block;background:var(--color-panel-bg);padding:25px}
+  body[data-journal-theme='nightStudy'] .journal-heading{justify-content:space-between;align-items:center}
+  body[data-journal-theme='nightStudy'] .journal-spread{display:block}
+  body[data-journal-theme='nightStudy'] .journal-sidepage{border-top:1px solid var(--color-divider);padding-top:25px;margin-top:27px}
+  body[data-journal-theme='nightStudy'] .journal-sidepage:before{display:none}
+  body[data-journal-theme='nightStudy'] .journal-note{min-height:165px}
+}
+@media(max-width:767px){
+  body[data-journal-theme='nightStudy'] .app-sidebar{width:100%;padding:5px 4px;border-right:0;border-top:1px solid var(--study-rail-line);flex-wrap:wrap;justify-content:flex-start}
+  body[data-journal-theme='nightStudy'] .app-sidebar:before,body[data-journal-theme='nightStudy'] :is(.journal-brand,.journal-nav-caption,.journal-sidebar-bottom){display:none}
+  body[data-journal-theme='nightStudy'] .sidebar-nav-btn{flex:1 0 17%;min-height:44px;padding:6px 2px;gap:4px}
+  body[data-journal-theme='nightStudy'] .sidebar-nav-btn.active:after{display:none}
+  body[data-journal-theme='nightStudy'] .journal-page{padding:22px 18px}
+  body[data-journal-theme='nightStudy'] .journal-heading-actions{margin-left:0}
+  body[data-journal-theme='nightStudy'] .journal-week-nav{gap:3px}
+  body[data-journal-theme='nightStudy'] .journal-week button{min-height:60px}
+  body[data-journal-theme='nightStudy'] .journal-section-title>span{margin-left:0;flex-basis:100%}
+  body[data-journal-theme='nightStudy'] .journal-quick-line{flex-wrap:wrap}
+  body[data-journal-theme='nightStudy'] .journal-quick-line input{font-size:16px;flex-basis:110px}
+  body[data-journal-theme='nightStudy'] .journal-quick-time input{min-height:38px;font-size:16px;width:120px}
+  body[data-journal-theme='nightStudy'] .journal-quick-options .journal-text-button{margin-left:0}
+  .journal-theme-picker select{min-height:36px}
+}

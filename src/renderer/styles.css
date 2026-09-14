@@ -563,6 +563,10 @@ body[data-card-style='3d'] .glass-card {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .calendar-header {
@@ -632,8 +636,8 @@ body[data-card-style='3d'] .glass-card {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: repeat(6, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
   gap: 4px;
   background: var(--color-calendar-bg);
   border-radius: 12px;
@@ -682,6 +686,7 @@ body[data-card-style='3d'] .glass-card {
   gap: 4px;
   width: 100%;
   min-width: 0;
+  flex-shrink: 0;
 }
 
 .day-cell .day-num {
@@ -751,6 +756,7 @@ body[data-card-style='3d'] .glass-card {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 0 0 auto;
   transition: opacity var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
 }
 /* filter는 배경이 자바스크립트로 인라인 지정되는 경우(이벤트 색상별)와도 안 부딪히고,
@@ -784,6 +790,7 @@ body[data-card-style='3d'] .glass-card {
   font-size: 10px;
   font-weight: 600;
   opacity: 0.75;
+  flex: 0 0 auto;
 }
 
 .day-cell:hover {
@@ -2889,6 +2896,29 @@ table.chulgo-ledger tfoot td:first-child {
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(20, 40, 90, 0.03), 0 10px 24px -12px rgba(20, 40, 90, 0.12);
 }
+
+.compare-sheet[hidden] { display: none; }
+.compare-sheets-row[data-single-sheet='true'] .compare-sheet { min-height: 0; }
+.compare-card > .chulgo-header { flex-wrap: wrap; gap: 10px; }
+.compare-visibility-controls { display: flex; flex-wrap: wrap; gap: 6px; }
+.compare-visibility-btn {
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-input-bg);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms;
+}
+.compare-visibility-btn:hover,
+.compare-visibility-btn[aria-expanded='false'] {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+  background: var(--color-secondary-button-bg);
+}
+.compare-visibility-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
 .compare-sheet-top {
   display: flex;

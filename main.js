@@ -11,14 +11,12 @@ const googleAuth = require('./src/main/googleAuth');
 const firebaseClient = require('./src/main/firebaseClient');
 const fileSearch = require('./src/main/fileSearch');
 
-// 개발 모드(npm start)와 설치된 정품 앱이 같은 이름을 쓰면 같은 설정 폴더(userData)를
-// 공유하게 되고, Electron의 단일 인스턴스 잠금이 "이미 실행 중"으로 보고 개발 모드를
-// 아무 에러 메시지 없이 조용히 종료시켜버린다 — 정품 앱이 켜져 있는 한 npm start가
-// 매번 원인 불명으로 안 켜지던 문제가 바로 이거였다. 개발 모드만 별도 폴더를 쓰게 분리한다.
-if (!app.isPackaged) {
-  app.setName('스케줄 캘린더 (dev)');
-  app.setPath('userData', path.join(app.getPath('appData'), '스케줄 캘린더 (dev)'));
-}
+// 설치 이름은 "여백"으로 바꾸되 기존 프로필 경로는 유지한다. 경로까지 바꾸면 Google
+// 로그인 토큰과 사용자가 저장한 설정을 새 앱이 찾지 못하기 때문이다.
+const isDev = !app.isPackaged;
+const legacyProfileName = isDev ? '스케줄 캘린더 (dev)' : '스케줄 캘린더';
+app.setName(isDev ? '여백 (dev)' : '여백');
+app.setPath('userData', path.join(app.getPath('appData'), legacyProfileName));
 
 const settingsStore = new Store({ name: 'app-settings' });
 const teamEventMapStore = new Store({ name: 'team-event-map' }); // teamEventId -> { googleEventId, signature }
@@ -227,7 +225,7 @@ function createWindow() {
 function createTray() {
   const trayIcon = nativeImage.createFromPath(APP_ICON_PATH).resize({ width: 32, height: 32 });
   tray = new Tray(trayIcon);
-  tray.setToolTip('스케줄 캘린더');
+  tray.setToolTip('여백');
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -936,6 +934,45 @@ const CHANGELOG = {
   '0.38.0': [
     '🆕 강제 업데이트 — 설정에서 최고관리자가 "최소 버전"을 지정하면, 그보다 낮은 버전은(재광님 포함 예외 없이) 업데이트 전까지 앱을 쓸 수 없습니다',
   ],
+  '0.38.1': [
+    '우드 감성 다이어리 디자인과 오늘의 페이지를 추가했습니다',
+    '오늘의 페이지에서 일정을 간편하게 추가하고 메모장에도 함께 저장할 수 있습니다',
+    '캘린더에서 색상을 선택하면 일정 추가창이 닫히던 오류를 수정했습니다',
+    '조직도와 직원 정보창 디자인을 개선하고 글꼴 8종을 추가했습니다',
+  ],
+  '0.38.2': [
+    '새로운 선택형 테마 "밤의 서재" — 월넛 사이드바와 크림색 노트, 손글씨 메모를 추가했습니다',
+    '상단의 테마 메뉴에서 기존 우드 다이어리와 새 테마를 바로 전환할 수 있습니다',
+    '월간 다이어리의 기존 달력 구조와 일정 기능, 정산장부 자동화는 그대로 유지됩니다',
+  ],
+  '0.38.3': [
+    '일정 새로고침 시 중복되던 Google Calendar 조회를 줄였습니다',
+    '오늘의 페이지에서 변경 없는 목록을 다시 그리지 않아 화면 갱신이 가벼워졌습니다',
+    '달력이 갱신되어도 변경 없는 메모의 편집 상태와 날짜 버튼을 유지합니다',
+  ],
+  '0.39.0': [
+    '우드 다이어리 · 밤의 서재 · 비밀의 숲 · 별빛 천문관 · 노을의 편지 · 겨울의 오두막, 6가지 움직이는 테마를 추가했습니다',
+    '각 테마의 세 장소를 직접 선택하거나 메뉴에 따라 이동할 수 있습니다. 배경 접기와 움직임 끄기도 지원합니다',
+    '밤의 서재 글자 가독성과 해변의 자연스러운 해안선을 다듬었습니다',
+    'Google 로그인과 기존 데이터, 월간 달력 기능 및 정산장부 자동화는 그대로 유지됩니다',
+  ],
+  '0.39.1': [
+    '프로그램 이름을 스케줄 캘린더에서 여백으로 변경했습니다',
+    '정산장부를 빠르게 수정할 때 입력칸과 알약 선택이 끊기던 문제를 고쳤습니다',
+    'Google 로그인과 기존 설정·데이터는 이전 프로필에서 그대로 이어집니다',
+  ],
+  '0.39.2': [
+    '창 크기를 줄여도 월간 다이어리의 일정 막대가 얇게 눌리지 않도록 수정했습니다',
+    '일정이 많은 주는 필요한 만큼 높아지고, 작은 창에서는 월간 달력 안을 스크롤해 모두 확인할 수 있습니다',
+    '줄어든 일정 제목에 마우스를 올리면 전체 제목을 확인할 수 있습니다',
+  ],
+  '0.39.3': [
+    '아홉 가지 밝은 다이어리 테마와 동물·식물이 움직이는 풍경을 만나보세요',
+    '메뉴를 접어 작업 공간을 넓히고, 오늘의 일정·챙길 일·메모를 새로운 카드로 확인할 수 있습니다',
+    '비교시트를 조건별로 나누고 한쪽을 접을 수 있으며, 작은 창에서는 세로로 배치됩니다',
+    '작은 창에서는 날짜 선택 시 일정 상세 카드가 열리고, 긴 일정은 스크롤로 확인할 수 있습니다',
+    '기존 Google 로그인·일정·정산장부 데이터와 입력 기능은 그대로 이어집니다',
+  ],
 };
 
 function compareVersions(a, b) {
@@ -1257,9 +1294,15 @@ function dateKeyOf(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-ipcMain.handle('memos:create', async (_e, { text, remindAt } = {}) => {
+ipcMain.handle('memos:create', async (_e, { text, remindAt, dueDate } = {}) => {
   if (!googleAuth.isSignedIn()) throw new Error('NOT_SIGNED_IN');
   let due = dateKeyOf(new Date());
+  if (dueDate !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || dateKeyOf(new Date(`${dueDate}T12:00:00`)) !== dueDate) {
+      throw new Error('메모 날짜가 올바르지 않습니다.');
+    }
+    due = dueDate;
+  }
   let alarmTime = null;
   if (remindAt) {
     const d = new Date(remindAt);

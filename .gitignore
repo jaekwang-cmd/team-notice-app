@@ -2,3 +2,40 @@ node_modules/
 config/config.json
 *.log
 dist/
+dist-storybook-preview/
+artifacts/
+playwright-report/
+test-results/
+
+# agent-studio:ignore:start
+.agent-studio-kit/
+.agent-studio/runs/
+.agent-studio/tools/
+.agent-studio/plugins/
+.agent-studio/*.lock
+.agent-studio-init.lock
+# agent-studio:ignore:end
+
+# Harness source is versioned; installed runtimes and reports remain local.
+!.agent-studio-kit/
+.agent-studio-kit/.runtime/
+.agent-studio-kit/node_modules/
+.agent-studio/verification/
+.agent-studio/memory/*.lock
+.serena/cache/
+.playwright-mcp/
+.omx/
+# Keep legacy Android outputs and signing material out of worker snapshots.
+android/.gradle/
+android/.idea/
+android/**/build/
+android/local.properties
+android/app/google-services.json
+android/app/src/main/assets/public/
+private/
+**/*.jks
+**/*.keystore
+**/release-signing.local.properties
+.env
+.env.*
+!.env.example

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>스케줄 캘린더</title>
+  <title>여백</title>
   <!-- 앱 전체 기본 서체 — 한글 UI에 많이 쓰이는 모던한 무료 서체(가변 폰트).
        인터넷이 없으면 그냥 시스템 기본 서체로 조용히 대체된다(기능엔 영향 없음).
        일반 <link rel="stylesheet">는 이게 다 받아질 때까지 첫 화면 자체를 막는다 —
@@ -22,8 +22,16 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" /></noscript>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="journal.css" />
+  <link rel="stylesheet" href="night-study.css" />
+  <link rel="stylesheet" href="journal-worlds.css" />
+  <link rel="stylesheet" href="storybook.css" />
+  <link rel="stylesheet" href="story-fonts.css" />
+  <link rel="stylesheet" href="storybook-shell.css" />
+  <link rel="stylesheet" href="storybook-pages.css" />
+  <link rel="stylesheet" href="storybook-workspace.css" />
 </head>
-<body>
+<body data-storybook="true">
   <!-- 강제 업데이트 차단 화면 — 닫기 버튼 없음, "지금 업데이트"만 누를 수 있다.
        평소엔 hidden, main 프로세스가 최소 버전보다 낮다고 판단하면 보인다. -->
   <div id="force-update-overlay" class="force-update-overlay hidden">
@@ -37,8 +45,11 @@
 
   <div class="app-bg">
     <nav class="app-sidebar" id="app-sidebar">
+      <div class="journal-brand"><span class="journal-brand-mark" aria-hidden="true">▤</span><div><strong>여백</strong><small>DAILY JOURNAL</small></div></div>
+      <div class="journal-nav-caption">일상 기록</div>
+      <button class="sidebar-nav-btn" data-view="journal" title="오늘의 페이지"><span class="sidebar-nav-icon">☀</span><span class="sidebar-nav-label">오늘의 페이지</span></button>
       <button class="sidebar-nav-btn active" data-view="calendar" title="캘린더">
-        <span class="sidebar-nav-icon">📅</span><span class="sidebar-nav-label">캘린더</span>
+        <span class="sidebar-nav-icon">📅</span><span class="sidebar-nav-label">월간 다이어리</span>
       </button>
       <button class="sidebar-nav-btn" data-view="memo" title="메모장">
         <span class="sidebar-nav-icon">📝</span><span class="sidebar-nav-label">메모장</span>
@@ -46,6 +57,7 @@
       <button class="sidebar-nav-btn" data-view="ai" title="AI 어시스턴트">
         <span class="sidebar-nav-icon">✨</span><span class="sidebar-nav-label">AI 어시스턴트</span>
       </button>
+      <div class="journal-nav-caption journal-work-caption">고객과 업무</div>
       <button class="sidebar-nav-btn" data-view="chulgo" title="정산장부">
         <span class="sidebar-nav-icon">📋</span><span class="sidebar-nav-label">정산장부</span>
       </button>
@@ -63,13 +75,17 @@
       <button class="sidebar-nav-btn hidden" id="org-nav-btn" data-view="org" title="조직 관리">
         <span class="sidebar-nav-icon">🏢</span><span class="sidebar-nav-label" id="org-nav-label">조직 관리</span>
       </button>
+      <div class="journal-side-life" id="journal-side-life" hidden aria-hidden="true"><canvas class="journal-side-canvas"></canvas></div>
+      <div class="journal-sidebar-bottom"><p>하나씩 기록하고,<br>가볍게 이어가는 하루.</p><div class="journal-account"><span class="journal-avatar" aria-hidden="true">나</span><div><span id="journal-user-name">나의 업무 공간</span><small id="journal-user-status">Google 계정 연동</small></div></div></div>
     </nav>
 
     <div class="app-main-col">
     <div class="titlebar">
-      <span class="app-title">🗓️ 스케줄 캘린더</span>
+      <button type="button" id="journal-rail-toggle" class="journal-rail-toggle" aria-label="메뉴 접기" title="메뉴 접기" aria-expanded="true" aria-controls="app-sidebar"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16m6-12-3 4 3 4"/></svg></button>
+      <span class="app-title">여백</span>
       <button id="app-version-badge" class="app-version-badge" title="클릭해서 업데이트 확인">v...</button>
       <div class="titlebar-shortcuts" id="titlebar-shortcuts"></div>
+      <label class="journal-theme-picker">테마 <select id="journal-theme-select" aria-label="다이어리 테마"></select></label>
       <div class="window-controls">
         <button id="btn-pin" title="창 위치 고정 (이동 잠금)">📌</button>
         <button id="btn-settings" title="설정">⚙️</button>
@@ -81,6 +97,60 @@
     <div id="config-banner" class="config-banner hidden">
       ⚠️ Firebase / Google 설정이 필요합니다. <code>config/config.json</code>을 채워주세요. (README 참고)
     </div>
+
+    <section id="journal-world" hidden aria-label="다이어리 풍경">
+      <div class="world-hero" id="world-hero">
+        <div class="world-art" aria-hidden="true"><canvas class="world-landscape"></canvas><canvas class="world-weather"></canvas><div class="world-breathing-light"></div></div>
+        <div class="world-veil" aria-hidden="true"></div>
+        <canvas class="world-panorama" aria-hidden="true"></canvas>
+        <div class="world-copy"><div class="world-eyebrow"></div><h2 class="world-title"></h2><p class="world-sub"></p></div>
+      </div>
+      <div class="world-controls">
+        <div class="world-places" aria-label="풍경 장소">
+          <button type="button" data-world-scene="0" aria-pressed="true"></button>
+          <button type="button" data-world-scene="1" aria-pressed="false"></button>
+          <button type="button" data-world-scene="2" aria-pressed="false"></button>
+          <button type="button" class="world-enter" aria-label="다음 풍경으로 이동">더 들어가기 →</button>
+        </div>
+        <div class="world-options">
+          <label><input type="checkbox" class="world-follow" checked>메뉴에 따라 이동</label>
+          <button type="button" class="world-motion" aria-pressed="true">움직임 켜짐</button>
+          <button type="button" class="world-collapse" aria-expanded="true" aria-controls="world-hero">배경 접기</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="journal-panel" class="view-panel hidden" data-view-pane="journal" aria-label="오늘의 페이지">
+      <div class="journal-page">
+        <div class="journal-eyebrow"><span><span id="journal-theme-name">나의 다이어리</span> / 오늘의 페이지</span><span id="journal-month-stamp"></span></div>
+        <div class="journal-heading"><div class="journal-date-copy"><span id="journal-day-number" class="journal-day-number" aria-hidden="true"></span><div><h1 id="journal-date-title"></h1><p>조금의 여유를 두고, 오늘을 펼쳐보세요.</p></div></div><div class="journal-heading-actions"><button type="button" id="journal-today" class="btn btn-secondary">오늘</button><button type="button" id="journal-add-event" class="btn btn-primary">+ 일정 쓰기</button></div></div>
+        <div class="journal-week-nav"><button type="button" id="journal-prev-week" class="nav-btn" aria-label="이전 주">‹</button><div id="journal-week" class="journal-week" aria-label="주간 날짜"></div><button type="button" id="journal-next-week" class="nav-btn" aria-label="다음 주">›</button></div>
+        <div class="journal-spread">
+          <section>
+            <h2 class="journal-section-title">하루의 일정 <span id="journal-event-count"></span></h2>
+            <form id="journal-quick-form" class="journal-quick-form">
+              <div class="journal-quick-line"><span class="journal-quick-plus" aria-hidden="true">+</span><input id="journal-quick-title" type="text" aria-label="빠르게 추가할 일정" placeholder="어떤 일을 기록할까요?" maxlength="200" required><button type="submit" id="journal-quick-submit" class="btn btn-primary">추가</button></div>
+              <div class="journal-quick-options"><span id="journal-quick-date"></span><label class="journal-quick-time">시간 <input id="journal-quick-time" type="time" aria-label="일정 시작 시간, 비우면 종일"></label><span id="journal-quick-duration">시간을 비우면 종일</span><button type="button" id="journal-detailed-event" class="journal-text-button">상세 설정 ↗</button></div>
+              <p class="journal-quick-hint">일정과 메모장에 함께 기록해요.</p>
+            </form>
+            <p id="journal-quick-status" class="journal-entry-status" role="status" aria-live="polite"></p>
+            <div id="journal-timeline" class="journal-timeline"></div>
+            <button type="button" class="journal-text-button" data-journal-go="calendar">월간 다이어리에서 보기 ↗</button>
+          </section>
+          <aside class="journal-sidepage">
+            <div class="journal-tasks-block">
+            <h2 class="journal-section-title">챙길 일 <span id="journal-task-count"></span></h2><div id="journal-task-list"></div><button type="button" class="journal-text-button" data-journal-go="memo">전체 메모 보기 ↗</button>
+            </div>
+            <div class="journal-notes-block">
+            <h2 class="journal-section-title journal-note-title">짧은 메모</h2><textarea id="journal-note-draft" class="journal-note" placeholder="잊기 전에, 가볍게 한 줄." aria-label="메모 초안" maxlength="500"></textarea>
+            <div class="journal-note-actions"><span>메모장에 바로 저장</span><button type="button" id="journal-transfer-note" class="journal-text-button">메모 저장 ↗</button></div><p id="journal-note-status" class="journal-entry-status" role="status" aria-live="polite"></p>
+            </div>
+            <div class="journal-assistant"><h2>✧ 나의 AI 비서</h2><p>일정 등록부터 메모와 파일 찾기까지,<br>필요한 일을 편하게 이야기하세요.</p><button type="button" class="journal-text-button" data-journal-go="ai">비서에게 부탁하기 ↗</button></div>
+          </aside>
+        </div>
+        <div class="journal-footer"><span>A LITTLE SPACE FOR YOUR DAY</span><span>01 — DAILY</span></div>
+      </div>
+    </section>
 
     <div class="content" data-view-pane="calendar">
       <section class="glass-card calendar-card">
@@ -274,8 +344,12 @@
     <div id="compare-panel" class="view-panel hidden" data-view-pane="compare">
       <div class="glass-card compare-card">
         <div class="chulgo-header">
-          <h3><span class="chulgo-icon-badge">📊</span> 금융사 비교시트</h3>
+          <div class="compare-page-title"><span class="workspace-eyebrow">CONDITIONS & POSSIBILITIES</span><h3>금융사 비교시트</h3><p>조건을 나란히 펼쳐, 더 나은 선택을 찾아보세요.</p></div>
           <div class="chulgo-spacer"></div>
+          <div class="compare-visibility-controls" role="group" aria-label="비교시트 표시">
+            <button type="button" class="compare-visibility-btn" data-compare-toggle="0" aria-expanded="true" aria-controls="compare-sheet-0">1번 시트 접기</button>
+            <button type="button" class="compare-visibility-btn" data-compare-toggle="1" aria-expanded="true" aria-controls="compare-sheet-1">2번 시트 접기</button>
+          </div>
           <button id="compare-settings-btn" class="nav-btn chulgo-refresh-btn" title="금융사 목록 설정 (추가/삭제/이름변경)">⚙</button>
         </div>
         <div class="compare-sheets-row">
@@ -483,7 +557,7 @@
         </select>
       </div>
       <div class="theme-row theme-font-preview-row">
-        <span id="theme-font-preview">가나다라마바사 ABC 123,456원</span>
+        <span id="theme-font-preview">오늘의 기록, 나의 다이어리<br>가나다라마바사 ABC 123,456원</span>
       </div>
       <div class="theme-row">
         <span>날짜 숫자 크기</span>
@@ -636,8 +710,8 @@
   </div>
 
   <div id="org-member-popup" class="chulgo-mini-overlay hidden">
-    <div class="chulgo-mini-card">
-      <h4>직원 정보</h4>
+    <div class="chulgo-mini-card org-dialog" role="dialog" aria-modal="true" aria-labelledby="org-member-dialog-title">
+      <div class="org-dialog-header"><span>PEOPLE &amp; TEAMS</span><h4 id="org-member-dialog-title">직원 정보</h4><p>함께하는 사람의 소속과 역할을 관리해요.</p></div>
       <div class="reminder-form-grid">
         <label class="reminder-form-field">
           <span>이름</span>
@@ -682,8 +756,8 @@
   </div>
 
   <div id="org-team-popup" class="chulgo-mini-overlay hidden">
-    <div class="chulgo-mini-card">
-      <h4 id="org-team-popup-title">팀 추가</h4>
+    <div class="chulgo-mini-card org-dialog" role="dialog" aria-modal="true" aria-labelledby="org-team-popup-title">
+      <div class="org-dialog-header"><span>PEOPLE &amp; TEAMS</span><h4 id="org-team-popup-title">팀 추가</h4><p>함께 일할 팀의 이름과 소속을 정해주세요.</p></div>
       <div class="reminder-form-grid">
         <label class="reminder-form-field">
           <span>소속</span>
@@ -949,7 +1023,15 @@
     </div>
   </div>
 
+  <script src="fonts.js"></script>
   <script src="theme.js"></script>
+  <script src="storybook-themes.js"></script>
+  <script src="storybook-panorama.js"></script>
+  <script src="storybook-sidebar.js"></script>
+  <script src="journal-worlds.js"></script>
+  <script src="journal-entry.js"></script>
+  <script src="journal.js"></script>
   <script src="renderer.js"></script>
+  <script src="storybook.js"></script>
 </body>
 </html>

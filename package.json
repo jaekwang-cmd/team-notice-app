@@ -1,13 +1,17 @@
 {
   "name": "team-notice-app",
-  "version": "0.38.0",
-  "description": "개인 캘린더 + 팀 실시간 공지 데스크톱 앱",
+  "version": "0.39.3",
+  "description": "일정과 기록, 영업 정산을 담는 개인 다이어리",
   "main": "main.js",
   "private": true,
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win",
-    "publish": "electron-builder --win --publish always"
+    "publish": "electron-builder --win --publish always",
+    "test": "node --test tests/calendar-refresh.test.js tests/calendar-responsive.test.js tests/journal-entry.test.js tests/journal-render.test.js tests/journal-worlds.test.js tests/night-theme-picker.test.js tests/night-theme.test.js tests/ui-refinements.test.js",
+    "test:ui": "node tests/storybook-ui.cjs",
+    "test:ui:nature": "node tests/storybook-nature-ui.cjs",
+    "test:ui:layout": "node tests/storybook-layout-ui.cjs"
   },
   "dependencies": {
     "@googleapis/calendar": "^16.0.0",
@@ -20,16 +24,20 @@
     "google-auth-library": "^11.0.2"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "electron": "^32.1.2",
     "electron-builder": "^25.1.8"
   },
   "build": {
     "appId": "com.teamnotice.app",
-    "productName": "스케줄 캘린더",
+    "productName": "여백",
+    "artifactName": "team-notice-app-setup-${version}.${ext}",
     "files": [
       "main.js",
       "preload.js",
       "src/**/*",
+      "!src/renderer/premium*.*",
+      "!src/renderer/premium-fonts/**/*",
       "assets/**/*",
       "build/icon.png",
       "node_modules/**/*"

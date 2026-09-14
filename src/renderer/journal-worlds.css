@@ -1,0 +1,50 @@
+/* Shared scenery is decorative. Existing view components own all business data and actions. */
+body[data-world-theme]{--world-rail:var(--color-panel-bg);--world-rail-ink:var(--color-text-primary);--world-rail-muted:var(--color-text-secondary);--world-hero:var(--color-app-bg);--world-hero-ink:var(--color-text-primary);--world-hero-muted:var(--color-text-secondary);--world-serif:'Gowun Batang','Batang',serif}
+body[data-world-theme='forest']{--world-rail:#e2e7d8;--world-rail-ink:#283a30;--world-rail-muted:#596c5d;--world-hero:#e5edda;--world-hero-ink:#283a30;--world-hero-muted:#596c5d}
+body[data-world-theme='stars']{color-scheme:dark;--world-rail:#141b2b;--world-rail-ink:#ece7d9;--world-rail-muted:#b2b7c6;--world-hero:#131c31;--world-hero-ink:#ece7d9;--world-hero-muted:#b2b7c6;--world-serif:'Noto Serif KR','Batang',serif}
+body[data-world-theme='sea']{--world-rail:#f1dace;--world-rail-ink:#594a47;--world-rail-muted:#806761;--world-hero:#ffe9d5;--world-hero-ink:#594a47;--world-hero-muted:#806761}
+body[data-world-theme='snow']{--world-rail:#ded8cc;--world-rail-ink:#4b3d32;--world-rail-muted:#746350;--world-hero:#e8e7e0;--world-hero-ink:#4b3d32;--world-hero-muted:#746350;--world-serif:'Noto Serif KR','Batang',serif}
+body[data-world-theme='wood']{--world-rail:#e2d5c2;--world-rail-ink:#574937;--world-rail-muted:#756550;--world-hero:#e9dcc8;--world-hero-ink:#3e3831;--world-hero-muted:#796957}
+body[data-world-theme='study']{--world-rail:#2d2723;--world-rail-ink:#e2d6c3;--world-rail-muted:#b6a896;--world-hero:#39312b;--world-hero-ink:#eee1c9;--world-hero-muted:#c6b798;--world-serif:'Noto Serif KR','Batang',serif}
+body[data-world-theme]:not([data-world-theme='stars']){color-scheme:light}
+body[data-world-theme] .app-sidebar,body[data-world-theme] .titlebar{background:var(--world-rail);color:var(--world-rail-ink);--color-text-primary:var(--world-rail-ink);--color-text-secondary:var(--world-rail-muted)}
+body[data-world-theme] .titlebar{--color-panel-bg:var(--world-rail)}
+body[data-world-theme] .app-sidebar .sidebar-nav-btn.active{background:var(--color-accent);color:var(--color-button-text)}
+body[data-world-theme] .journal-brand strong{font-family:var(--world-serif)}
+body[data-world-theme] .journal-account{overflow-wrap:anywhere}
+body[data-world-theme] .view-panel,body[data-world-theme] .content{background:var(--color-app-bg)}
+body[data-world-theme] :is(.memo-row,.reminder-card,.theme-preset-card){color:var(--color-text-primary)}
+body[data-world-theme='study'] :is(.memo-row,.reminder-card,.theme-preset-card){background:var(--color-input-bg)}
+body[data-world-theme='study'] #journal-world{--color-text-primary:#443a31;--color-text-secondary:#6d5f4f;--color-input-bg:#eee7db}
+body[data-world-theme='sea'] .journal-page{border-radius:18px}
+body[data-world-theme] .journal-theme-picker select{max-width:158px}
+#journal-world{flex:none;min-width:0;border-bottom:1px solid var(--color-divider);background:var(--color-panel-bg)}
+#journal-world[hidden]{display:none!important}
+#journal-world .world-hero{height:clamp(176px,25vh,252px);position:relative;overflow:hidden;background:var(--world-hero);isolation:isolate}
+#journal-world .world-art{position:absolute;left:0;right:0;top:50%;width:100%;aspect-ratio:1000/340;min-height:100%;transform:translateY(-50%);pointer-events:none}
+#journal-world canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#journal-world .world-breathing-light{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 75% 52%,#fff2ba25,transparent 30%)}
+#journal-world .world-veil{position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,var(--world-hero) 0%,color-mix(in srgb,var(--world-hero) 88%,transparent) 24%,transparent 72%)}
+#journal-world .world-copy{position:relative;padding:23px 30px;width:64%;color:var(--world-hero-ink);pointer-events:none}
+#journal-world .world-eyebrow{font-size:10px;letter-spacing:.17em;color:var(--world-hero-muted)}
+#journal-world .world-title{font:400 clamp(25px,2.5vw,34px)/1.5 var(--world-serif);letter-spacing:-.04em;white-space:pre-line;margin:12px 0 8px}
+#journal-world .world-sub{white-space:pre-line;font-size:11px;line-height:1.8;color:var(--world-hero-muted);margin:0}
+#journal-world:not([data-view='journal']) .world-hero{height:126px}
+#journal-world:not([data-view='journal']) .world-copy{padding:14px 26px;width:65%}
+#journal-world:not([data-view='journal']) .world-title{font-size:22px;line-height:1.45;margin:6px 0 0}
+#journal-world:not([data-view='journal']) .world-sub{display:none}
+#journal-world[data-collapsed='true'] .world-hero{display:none}
+#journal-world .world-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:5px 12px;min-height:40px;padding:6px 20px;background:var(--color-panel-bg);color:var(--color-text-primary)}
+#journal-world .world-places,#journal-world .world-options{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+#journal-world button{font:400 11px/1.5 var(--font-family);color:var(--color-text-primary);background:transparent;border:1px solid transparent;padding:5px 7px;border-radius:5px;cursor:pointer;min-height:28px}
+#journal-world button:hover{background:var(--color-day-cell-hover)}
+#journal-world [data-world-scene][aria-pressed='true']{background:var(--color-secondary-button-bg);border-color:var(--color-border)}
+#journal-world .world-enter{color:var(--color-accent)}
+#journal-world .world-options{margin-left:auto;gap:7px}
+#journal-world .world-options label{display:flex;gap:5px;align-items:center;font-size:11px;color:var(--color-text-secondary);cursor:pointer;white-space:nowrap}
+#journal-world .world-follow{accent-color:var(--color-accent);width:12px;height:12px;margin:0}
+#journal-world .world-motion{background:var(--color-input-bg);border-color:var(--color-border);color:var(--color-text-secondary)}
+#journal-world .world-motion[aria-pressed='true']::before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--color-accent);margin-right:5px;vertical-align:2px}
+#journal-world .world-collapse{color:var(--color-text-secondary)}
+@media(max-width:1100px){#journal-world .world-controls{padding-inline:14px}#journal-world .world-places{gap:2px}#journal-world .world-options{gap:3px}#journal-world button{padding-inline:5px}}
+@media(max-height:760px){#journal-world .world-hero{height:164px}#journal-world .world-copy{padding:17px 24px}#journal-world .world-title{font-size:25px;margin-top:8px}#journal-world .world-sub{display:none}#journal-world:not([data-view='journal']) .world-hero{height:96px}#journal-world:not([data-view='journal']) .world-copy{padding-block:9px}#journal-world:not([data-view='journal']) .world-title{font-size:19px}}
