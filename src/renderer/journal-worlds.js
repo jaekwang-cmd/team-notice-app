@@ -30,7 +30,7 @@
  const pagePlace={journal:0,today:0,calendar:1,memo:2,memos:2,ai:2,chulgo:2,ledger:2,reminder:1,compare:2,finance:2,org:1,settings:1};
  const storageKey='journal_world_preferences_v1';
  let saved={};try{saved=JSON.parse(localStorage.getItem(storageKey)||'{}')||{}}catch(_){}
- const state={theme:'wood',scene:1,followPage:saved.followPage!==false,motion:!reduce.matches&&saved.motion!==false,strength:.9,page:'calendar',collapsed:saved.collapsed===true};
+ const state={theme:'wood',scene:1,followPage:true,motion:!reduce.matches,strength:.9,page:'calendar',collapsed:false};
  const sceneMemory=saved.scenes&&typeof saved.scenes==='object'?saved.scenes:{};
  let frame=0,lastFrame=0,visible=false,timeline=0,lastTick=0,enabled=false;
  const base=$('.world-landscape'),fx=$('.world-weather'),ctx=base.getContext('2d'),anim=fx.getContext('2d');
@@ -470,7 +470,7 @@
  $('.world-motion').addEventListener('click',()=>{state.motion=!state.motion;persist();render()});
  $('.world-collapse').addEventListener('click',()=>{state.collapsed=!state.collapsed;persist();render()});
  document.addEventListener('visibilitychange',syncAnimation);
- reduce.addEventListener('change',event=>{if(event.matches){state.motion=false;render()}});
+ reduce.addEventListener('change',event=>{state.motion=!event.matches;render()});
  const resize=new ResizeObserver(()=>{if(enabled&&!state.collapsed)draw()});resize.observe($('.world-art'));resize.observe($('.world-hero'));if(sideLife)resize.observe(sideLife);
  const intersection=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;syncAnimation()});intersection.observe($('.world-hero'));
  window.addEventListener('pagehide',()=>{if(frame)cancelAnimationFrame(frame);resize.disconnect();intersection.disconnect()},{once:true});

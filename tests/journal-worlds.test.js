@@ -52,7 +52,7 @@ test('all 27 scenes render and changing theme/view never writes account settings
   h.set('custom'); assert.equal(h.root.hidden, true); assert.equal(h.body.dataset.worldTheme, undefined);
 });
 
-test('new garden themes keep separate place memories and draw animated rooms without account writes', () => {
+test('new garden scenes draw and restore automatic page selection without account writes', () => {
   const h = harness();
   h.node('.world-follow').change({ target: { checked: false } });
   for (const [mode, scene, world] of [['cherryGarden', 2, 'blossom'], ['lavenderField', 1, 'lavender'], ['rainyCafe', 0, 'cafe']]) {
@@ -70,7 +70,7 @@ test('new garden themes keep separate place memories and draw animated rooms wit
   const last = h.writes.at(-1);
   const restored = harness(last.value);
   for (const [mode, scene] of [['cherryGarden', '2'], ['lavenderField', '1'], ['rainyCafe', '0']]) {
-    restored.set(mode); assert.equal(restored.root.dataset.scene, scene);
+    restored.set(mode); assert.equal(restored.root.dataset.scene, '1');
     assert.equal(restored.writes.length, 0);
   }
   assert.ok(h.writes.every(write => write.key === 'journal_world_preferences_v1'));
@@ -90,14 +90,14 @@ test('animation stops while hidden, collapsed, disabled or reduced-motion and on
   h.set('dark'); assert.equal(h.frames.size, 0);
 });
 
-test('manual place, follow-menu choice and pause survive reload without replacing other settings', () => {
+test('old manual pause preferences no longer suppress automatic scenery after reload', () => {
   const h = harness('{invalid'); h.set('wood');
   h.node('.world-follow').change({ target: { checked: false } });
   h.scenes[2].click(); h.view('calendar'); assert.equal(h.root.dataset.scene, '2');
   h.node('.world-motion').click();
   const last = h.writes.at(-1); assert.equal(last.key, 'journal_world_preferences_v1');
   const restored = harness(last.value); restored.set('wood'); restored.show();
-  assert.equal(restored.root.dataset.scene, '2'); assert.equal(restored.frames.size, 0);
+  assert.equal(restored.root.dataset.scene, '1'); assert.equal(restored.frames.size, 1);
   restored.node('.world-follow').change({ target: { checked: true } }); assert.equal(restored.root.dataset.scene, '1');
 });
 

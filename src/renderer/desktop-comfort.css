@@ -1,0 +1,21 @@
+/* Desktop presentation only; saved records and document output are unchanged. */
+body #journal-world .world-controls{display:none!important}
+body[data-storybook] #journal-panel .journal-heading{flex-wrap:wrap}
+body[data-storybook] #journal-panel .journal-date-copy{flex:1 0 auto;max-width:100%;gap:16px}
+body[data-storybook] #journal-panel .journal-date-copy>div{min-width:0;flex:1}
+body[data-storybook] #journal-panel #journal-date-title{white-space:nowrap;word-break:keep-all;font-size:clamp(22px,2vw,32px)}
+body[data-storybook] #journal-panel .journal-heading-actions{margin-left:auto}
+body[data-storybook] #journal-panel .journal-sidepage{display:flex;flex-direction:column;align-self:stretch}
+body #journal-panel .journal-sidepage>:not(.journal-ai-dock){display:none!important}
+.journal-ai-dock{display:flex;flex:1;min-width:0;min-height:360px}
+body #journal-panel .journal-ai-dock .ai-card{height:clamp(360px,calc(100vh - 400px),900px);min-width:0;flex:1;padding:22px;background:var(--color-panel-bg);border:1px solid var(--color-border);border-radius:16px}
+.journal-ai-dock .ai-chat-messages{min-height:0;overscroll-behavior:contain}
+.journal-ai-dock :is(.ai-chat-msg,.ai-chat-empty,#ai-chat-input){font-size:var(--reading-body);line-height:1.65}
+.journal-ai-dock .ai-chat-input-row{flex-shrink:0;align-items:flex-end}
+.journal-ai-dock #ai-chat-input{min-width:0;resize:vertical;max-height:180px}
+body #chulgo-settlement-popup{display:block;overflow:auto;padding:54px 20px 24px;overscroll-behavior:contain}
+body #chulgo-settlement-popup.hidden{display:none}
+body #chulgo-settlement-popup .chulgo-settlement-card{margin:auto;max-height:none;overflow:visible;transform-origin:top left}
+.settlement-zoom-tools{position:fixed;top:10px;right:28px;z-index:2;display:flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-panel-bg);color:var(--color-text-primary)}
+.settlement-zoom-tools button{min-width:36px;padding:5px 8px;cursor:pointer}
+.settlement-zoom-tools span{font-size:12px}
