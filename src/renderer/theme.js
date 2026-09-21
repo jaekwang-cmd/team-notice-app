@@ -210,6 +210,8 @@ function applyTheme(theme) {
   const themeName = document.getElementById('journal-theme-name');
   if (themeName) themeName.textContent = isNightStudy ? '밤의 서재' : '나의 다이어리';
   const root = document.documentElement.style;
+  const uiFontScale = Number(theme.uiFontScale);
+  root.setProperty('--ui-font-scale', String(Number.isFinite(uiFontScale) && uiFontScale >= 100 && uiFontScale <= 200 ? uiFontScale / 100 : 1));
 
   COLOR_FIELDS.forEach((f) => {
     const value = theme[f.key];

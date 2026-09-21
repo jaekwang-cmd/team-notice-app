@@ -1518,6 +1518,7 @@ document.getElementById('settings-save').onclick = async () => {
 // COLOR_FIELDS/DARK_DEFAULTS/LIGHT_DEFAULTS/THEME_PRESETS/shadeHex/applyTheme now live in
 // theme.js (loaded before this script) so the 분리형 할 일 위젯 창도 같은 테마를 쓸 수 있다.
 const themeFontSelect = document.getElementById('theme-font');
+const themeUiFontScaleSelect = document.getElementById('theme-ui-font-scale');
 const themeDateFontSizeSelect = document.getElementById('theme-date-font-size');
 const themeEventFontSizeSelect = document.getElementById('theme-event-font-size');
 const themeBoldCheckbox = document.getElementById('theme-bold');
@@ -1530,6 +1531,7 @@ function currentThemeFromForm() {
     mode: checkedMode ? checkedMode.value : 'dark',
     cardStyle: checkedStyle ? checkedStyle.value : 'glass',
     font: themeFontSelect.value || null,
+    uiFontScale: themeUiFontScaleSelect?.value || '100',
     dateFontSize: themeDateFontSizeSelect.value,
     eventFontSize: themeEventFontSizeSelect.value,
     bold: themeBoldCheckbox.checked,
@@ -1558,6 +1560,7 @@ function fillThemeInputs(theme) {
     if (el) el.value = theme[f.key] || defaults[f.key];
   });
   themeFontSelect.value = theme.font || '';
+  if (themeUiFontScaleSelect) themeUiFontScaleSelect.value = theme.uiFontScale || '100';
   themeDateFontSizeSelect.value = theme.dateFontSize || defaults.dateFontSize;
   themeEventFontSizeSelect.value = theme.eventFontSize || defaults.eventFontSize;
   themeBoldCheckbox.checked = Boolean(theme.bold);
@@ -1652,7 +1655,7 @@ COLOR_FIELDS.forEach((f) => {
   const el = document.getElementById(f.id);
   if (el) el.addEventListener('input', () => applyTheme(currentThemeFromForm()));
 });
-[themeFontSelect, themeDateFontSizeSelect, themeEventFontSizeSelect].forEach((el) => {
+[themeFontSelect, themeDateFontSizeSelect, themeEventFontSizeSelect, themeUiFontScaleSelect].filter(Boolean).forEach((el) => {
   el.addEventListener('change', () => {
     applyTheme(currentThemeFromForm());
     if (typeof currentGridStart !== 'undefined' && currentGridStart && el !== themeFontSelect) buildCalendarGrid();

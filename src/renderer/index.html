@@ -565,6 +565,15 @@
         <span id="theme-font-preview">오늘의 기록, 나의 다이어리<br>가나다라마바사 ABC 123,456원</span>
       </div>
       <div class="theme-row">
+        <label for="theme-ui-font-scale">메뉴·본문 글씨 크기</label>
+        <select id="theme-ui-font-scale">
+          <option value="100">100% · 기본</option><option value="110">110%</option>
+          <option value="125">125% · 손글씨 추천</option><option value="140">140%</option>
+          <option value="160">160%</option><option value="180">180%</option><option value="200">200%</option>
+        </select>
+      </div>
+      <p class="theme-reading-hint">메뉴·풍경 버튼·메모·안내 글씨를 함께 키웁니다. 날짜와 일정 크기는 아래에서 따로 조절하세요.</p>
+      <div class="theme-row">
         <span>날짜 숫자 크기</span>
         <select id="theme-date-font-size">
           <option value="10">10px</option>
@@ -1056,5 +1065,6 @@
   <link rel="stylesheet" href="ledger-ui.css">
   <script src="ledger-ui.js"></script>
   <script src="storybook.js"></script>
+  <link rel="stylesheet" href="readable-type.css">
 </body>
 </html>

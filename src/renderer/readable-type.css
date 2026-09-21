@@ -1,0 +1,30 @@
+/* Text-only reading controls. Calendar dates/events keep their independent sizes. */
+:root{--ui-font-scale:1;--reading-caption:calc(12px * var(--ui-font-scale));--reading-label:calc(13px * var(--ui-font-scale));--reading-body:calc(15px * var(--ui-font-scale));--reading-title:calc(23px * var(--ui-font-scale))}
+body :is(.sidebar-nav-btn,.journal-account,.journal-account small,.journal-sidebar-bottom p,.journal-nav-caption){font-size:var(--reading-label)!important;line-height:1.55!important}
+body .sidebar-nav-btn{height:auto!important;white-space:normal;min-height:40px;flex-shrink:0}
+body #journal-world :is(button,.world-options label,.world-sub){font-size:var(--reading-label)!important;line-height:1.5!important;height:auto!important}
+body #journal-world .world-eyebrow{font-size:var(--reading-caption)!important;letter-spacing:.05em}
+body #journal-world :is(.world-controls,.world-options,.world-scenes){flex-wrap:wrap;min-width:0}
+body :is(.memo-done-toggle,.memo-count,.reminder-count,.text-caption,.text-secondary,.chulgo-mini-hint,.chulgo-group-label,.chulgo-action-hint,.chulgo-month-count,.chulgo-formula-hint,.journal-eyebrow,.journal-empty p,.journal-event-meta,.journal-memo-meta,.notice-time,.notice-author,.memo-meta,.theme-reading-hint){font-size:var(--reading-caption)!important;line-height:1.6!important}
+body :is(.notice-text,.memo-text,.journal-event-title,.journal-memo-text,.journal-note-text,.journal-empty,.chulgo-empty,.reminder-name,.reminder-note){font-size:var(--reading-body)!important;line-height:1.6!important;overflow-wrap:anywhere}
+body :is(#memo-panel,#reminder-panel,#ai-panel,#compare-panel,#chulgo-panel,.settings-card,.chulgo-mini-card,.ledger-drawer-card) :is(button,input:not([type=checkbox]):not([type=radio]),select,textarea){font-size:var(--reading-label)!important;line-height:1.5!important}
+body :is(.chulgo-header h3,.text-page-title,.settings-card h3,.ledger-drawer-card h3){font-size:var(--reading-title)!important;line-height:1.4!important}
+body :is(.theme-row,.setting-row,.ledger-field,.ledger-goal form label,.chulgo-position-field,.memo-alarm-row,.notice-input label){font-size:var(--reading-label)!important;line-height:1.5!important}
+body :is(#memo-count,#reminder-count,#memo-panel .badge,.chulgo-header .count-badge,.memo-alarm-row,.memo-done-toggle,.memo-done-chevron){font-size:var(--reading-label)!important;line-height:1.5!important}
+body :is(.ledger-goal-head h3,.ledger-goal-counts>span:first-child,.ledger-field-grid h4){font-size:var(--reading-body)!important}
+body :is(.ledger-goal-head>span,.ledger-goal-counts>span:last-child,.ledger-goal summary,.ledger-goal form>span,.ledger-entry-help,.ledger-drawer-card header p,.ledger-drawer-card footer p){font-size:var(--reading-caption)!important}
+body :is(.settings-card,.ledger-drawer-card,.chulgo-mini-card) :is(input:not([type=checkbox]):not([type=radio]),select){height:auto!important;min-height:36px;padding-block:6px}
+body #chulgo-panel .chulgo-ledger :is(input,select){height:auto;min-height:30px}
+body :is(.theme-row,.ledger-goal-counts,.chulgo-header,.chulgo-meta-row,.chulgo-action-row){flex-wrap:wrap;gap:8px}
+body .theme-row>select{max-width:100%;min-width:0}body .theme-row>label{flex-shrink:0}
+body #theme-font-preview{font-size:calc(20px * var(--ui-font-scale));line-height:1.7}
+.theme-reading-hint{margin:5px 0 18px;color:var(--color-text-secondary);font-size:var(--reading-caption)}
+body .settings-card{overflow:auto;max-height:90vh}
+body .memo-done-toggle{height:auto;white-space:normal}
+body .app-sidebar{overflow-y:auto}
+body #memo-today-label{font-size:var(--reading-label)!important;line-height:1.5;padding:4px 8px;vertical-align:middle}
+body #journal-world .world-places{flex-wrap:wrap}
+body .sidebar-nav-label{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere}
+body :is(.memo-row-text,.memo-edit-input){font-size:var(--reading-body)!important;line-height:1.6!important;overflow-wrap:anywhere}
+body :is(.memo-row-meta,.memo-section-header,#memo-alarm-row){font-size:var(--reading-caption)!important;line-height:1.6!important}
+body[data-storybook] #journal-world .world-hero{height:auto;min-height:var(--sb-hero-height)}

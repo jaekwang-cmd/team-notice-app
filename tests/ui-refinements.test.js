@@ -58,7 +58,7 @@ test('font choices do not load all fonts; chosen fonts are loaded once and retry
   const picker = { appendChild(node) { children.push(node); } };
   const context = { window: {}, URLSearchParams, document: { getElementById: () => picker, createElement: element, head: { appendChild(node) { requests.push(node); } } } };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/renderer/fonts.js'), 'utf8'), context);
-  assert.equal(children.flatMap(group => group.children).length, 8);
+  assert.equal(children.flatMap(group => group.children).length, 16);
   assert.equal(requests.length, 0);
   const stack = "'Gowun Dodum', 'Malgun Gothic', sans-serif";
   context.window.appFonts.ensureLoaded(stack); context.window.appFonts.ensureLoaded(stack);
