@@ -990,6 +990,9 @@ const CHANGELOG = {
     '출고 장부를 연속으로 수정해도 입력칸과 AI 창이 끊기지 않도록 실시간 갱신과 저장 요청을 정리했습니다',
     '월간 다이어리의 날짜와 일정 글씨를 각각 최대 30px까지 키울 수 있습니다',
   ],
+  '0.39.5': [
+    '장부 AI 채우기와 AI 어시스턴트 모델을 GPT-5.6 Terra로 변경했습니다',
+  ],
 };
 
 function compareVersions(a, b) {
@@ -1988,9 +1991,9 @@ async function callOpenAIJson(apiKey, systemPrompt, userContent) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.6-terra',
       response_format: { type: 'json_object' },
-      temperature: 0,
+      reasoning_effort: 'none',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
@@ -2119,8 +2122,8 @@ async function callOpenAIChat(apiKey, systemPrompt, messages) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      temperature: 0.4,
+      model: 'gpt-5.6-terra',
+      reasoning_effort: 'none',
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
       tools: CALENDAR_CHAT_TOOLS,
     }),
