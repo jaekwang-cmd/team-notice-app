@@ -92,7 +92,7 @@
     el('journal-month-stamp').textContent = date.toLocaleString('en-US', { month: 'long' }).toUpperCase() + ', ' + date.getFullYear();
     const addButton = el('journal-add-event');
     addButton.disabled = !isGoogleSignedIn || quickBusy;
-    addButton.title = isGoogleSignedIn ? '선택한 날짜에 일정 추가' : '월간 다이어리에서 Google 계정으로 로그인하세요';
+    addButton.title = isGoogleSignedIn ? '선택한 날짜에 일정 추가' : '화면 위의 Google 로그인으로 계정을 연결하세요';
     syncEntryControls();
     const monday = new Date(date); monday.setDate(date.getDate() - (date.getDay() + 6) % 7);
     const week = el('journal-week');
@@ -139,7 +139,7 @@
     if (!isGoogleSignedIn || !events.length) {
       const empty = document.createElement('div'); empty.className = 'journal-empty';
       const heading = document.createElement('h3'); heading.textContent = isGoogleSignedIn ? '아직 비어 있는 페이지.' : '나의 다이어리를 연결하세요.';
-      const description = document.createElement('p'); description.textContent = isGoogleSignedIn ? '새로운 약속이나 기억할 일을 적어보세요.' : '월간 다이어리에서 기존 Google 계정으로 로그인하면 일정이 표시돼요.';
+      const description = document.createElement('p'); description.textContent = isGoogleSignedIn ? '새로운 약속이나 기억할 일을 적어보세요.' : '화면 위의 Google 로그인으로 기존 계정을 연결하면 일정이 표시돼요.';
       empty.append(heading, description); list.append(empty);
     }
     events.forEach(event => {

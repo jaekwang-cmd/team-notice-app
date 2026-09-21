@@ -772,10 +772,10 @@ body[data-card-style='3d'] .glass-card {
    막대처럼 보이게 한다(진짜 grid-column spanning 대신 쓰는 가벼운 방식). */
 .event-banner-segment {
   position: absolute;
-  height: 14px;
-  font-size: 10px;
+  height: var(--calendar-banner-height, 14px);
+  font-size: var(--calendar-event-font-size);
   font-weight: 600;
-  line-height: 14px;
+  line-height: var(--calendar-banner-height, 14px);
   padding: 0 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -808,6 +808,39 @@ body[data-card-style='3d'] .glass-card {
 .day-cell.has-events {
   outline: 1px solid var(--color-event-border);
 }
+
+.google-signin-banner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--sb-paper, var(--color-input-bg));
+  color: var(--sb-ink, var(--color-text-primary));
+  border-block: 1px solid var(--sb-line, var(--color-border));
+}
+.google-signin-banner > div { min-width: 0; display: grid; gap: 3px; }
+.google-signin-banner strong { font-size: 13px; font-weight: 600; }
+.google-signin-banner span { font-size: 11px; line-height: 1.5; color: var(--sb-muted, var(--color-text-secondary)); }
+.google-signin-banner button {
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 1px solid var(--sb-accent, var(--color-accent));
+  border-radius: 9px;
+  background: var(--sb-accent, var(--color-accent));
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.google-signin-banner button:hover:not(:disabled) { filter: brightness(1.08); }
+.google-signin-banner button:disabled { opacity: .7; cursor: wait; }
+.google-signin-banner button:focus-visible { outline: 2px solid var(--sb-accent, var(--color-accent)); outline-offset: 3px; }
 
 .google-status {
   margin-top: 10px;
@@ -3706,12 +3739,11 @@ table.chulgo-ledger tbody tr {
 }
 #chulgo-ai-fill-popup .chulgo-mini-card {
   pointer-events: auto;
-  background: color-mix(in srgb, var(--color-panel-bg) 92%, var(--color-text-primary) 8%);
-  /* 이 카드는 뒤에서 실시간으로 편집되는 장부 위에 떠 있어서(고정된 배경이 아니라
-     계속 바뀌는 내용), 블러를 계속 다시 그려야 한다 — 40px은 20~30px대인 다른 곳보다
-     훨씬 비싸서 반경만 낮췄다(육안상 차이는 거의 없다). */
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  /* The ledger below receives frequent live updates. An opaque paper surface
+     keeps the editor legible without recompositing a backdrop blur per update. */
+  background: color-mix(in srgb, #fffaf3 94%, var(--color-text-primary) 6%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* --- 메모 / 문구 결과 미니 팝업 --- */

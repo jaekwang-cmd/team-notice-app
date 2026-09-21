@@ -31,6 +31,8 @@ let viewMonth = today.getMonth(); // 0-indexed
 const holidaysCache = new Map(); // year -> [{date, name}]
 let eventsByDate = new Map(); // 'YYYY-MM-DD' -> [event, ...]
 let isGoogleSignedIn = false;
+let googleSignInPending = false;
+let googleSignInError = '';
 let isConfigured = false;
 let memos = [];
 let currentUser = { signedIn: false, uid: null, isAdmin: false };
@@ -118,13 +120,14 @@ const CALENDAR_EVENT_ROW_HEIGHT = 24;
 const CALENDAR_MORE_ROW_HEIGHT = 16;
 const CALENDAR_MIN_WEEK_HEIGHT = 92;
 
-function calendarWeekMinHeight(trackCount, eventCount) {
-  const bannerHeight = Math.max(0, trackCount) * (EVENT_BANNER_HEIGHT + EVENT_BANNER_GAP);
+function calendarWeekMinHeight(trackCount, eventCount, metrics = {}) {
+  const bannerHeight = Math.max(0, trackCount) * ((metrics.bannerHeight || EVENT_BANNER_HEIGHT) + EVENT_BANNER_GAP);
   const visibleCount = Math.min(Math.max(0, eventCount), MAX_EVENT_LINES);
   const moreHeight = eventCount > MAX_EVENT_LINES ? CALENDAR_MORE_ROW_HEIGHT : 0;
   return Math.max(
     CALENDAR_MIN_WEEK_HEIGHT,
-    CALENDAR_WEEK_BASE_HEIGHT + bannerHeight + visibleCount * CALENDAR_EVENT_ROW_HEIGHT + moreHeight,
+    (metrics.baseHeight || CALENDAR_WEEK_BASE_HEIGHT) + bannerHeight
+      + visibleCount * (metrics.eventRowHeight || CALENDAR_EVENT_ROW_HEIGHT) + moreHeight,
   );
 }
 
@@ -142,6 +145,19 @@ function updateSelectedDayCell() {
 const EVENT_BANNER_HEIGHT = 14;
 const EVENT_BANNER_GAP = 2;
 const EVENT_BANNER_TOP_OFFSET = 16; // 날짜 숫자 아래부터 시작
+
+function calendarVisualMetrics() {
+  const styles = getComputedStyle(document.documentElement);
+  const dateSize = Number.parseFloat(styles.getPropertyValue('--calendar-date-font-size')) || 11;
+  const eventSize = Number.parseFloat(styles.getPropertyValue('--calendar-event-font-size')) || 9;
+  const topOffset = Math.max(EVENT_BANNER_TOP_OFFSET, Math.ceil(EVENT_BANNER_TOP_OFFSET + (dateSize - 16) * 1.7));
+  return {
+    topOffset,
+    baseHeight: Math.max(CALENDAR_WEEK_BASE_HEIGHT, topOffset + 26),
+    bannerHeight: eventSize <= 12 ? EVENT_BANNER_HEIGHT : Math.ceil(eventSize * 1.35 + 2),
+    eventRowHeight: Math.max(CALENDAR_EVENT_ROW_HEIGHT, Math.ceil(eventSize * 1.4 + 6)),
+  };
+}
 
 // 42칸(6주)을 한 주씩 훑으며, 그 주에 걸쳐있는 여러 날짜짜리 일정들을 서로 안 겹치게
 // 줄(track)에 배정한다 — 흔한 달력 UI의 구간 스케줄링(interval scheduling) 방식과 같다.
@@ -193,6 +209,8 @@ function computeWeekBanners(gridStartDate, events) {
 function buildCalendarGrid() {
   const todayStr = toDateStr(today);
   calendarGrid.innerHTML = '';
+  const metrics = calendarVisualMetrics();
+  calendarGrid.style.setProperty('--calendar-banner-height', `${metrics.bannerHeight}px`);
   const weekBanners = computeWeekBanners(currentGridStart, multiDayEvents);
 
   // 일정이 많은 주는 필요한 만큼 높이고, 창보다 길어지면 .calendar-main이 스크롤한다.
@@ -204,7 +222,7 @@ function buildCalendarGrid() {
       date.setDate(currentGridStart.getDate() + weekIndex * 7 + dayIndex);
       busiestDayEventCount = Math.max(busiestDayEventCount, (eventsByDate.get(toDateStr(date)) || []).length);
     }
-    return calendarWeekMinHeight(week.trackCount, busiestDayEventCount);
+    return calendarWeekMinHeight(week.trackCount, busiestDayEventCount, metrics);
   });
   calendarGrid.style.minHeight = `${weekHeights.reduce((sum, height) => sum + height, 0)}px`;
   calendarGrid.style.gridTemplateRows = weekHeights.map((height) => `minmax(${height}px, 1fr)`).join(' ');
@@ -231,7 +249,7 @@ function buildCalendarGrid() {
     // 이 주에 여러 날짜짜리 막대가 있으면, 그 줄 수만큼 위쪽에 자리를 비워둔다 —
     // 한 주 안의 7칸이 전부 같은 만큼 비워야 날짜 숫자 줄이 가지런히 맞는다.
     if (week.trackCount > 0) {
-      cell.style.paddingTop = `${EVENT_BANNER_TOP_OFFSET + week.trackCount * (EVENT_BANNER_HEIGHT + EVENT_BANNER_GAP)}px`;
+      cell.style.paddingTop = `${metrics.topOffset + week.trackCount * (metrics.bannerHeight + EVENT_BANNER_GAP)}px`;
     }
 
     // 날짜 숫자 + (있으면) 공휴일 이름을 한 줄에 같이 보여준다 — 예전엔 title
@@ -260,7 +278,7 @@ function buildCalendarGrid() {
         const color = EVENT_COLOR_BY_ID.get(seg.event.colorId);
         bar.style.background = color ? color.hex : 'var(--color-event-bg)';
         bar.style.color = color ? '#3a3a3a' : 'var(--color-event-text)';
-        bar.style.top = `${EVENT_BANNER_TOP_OFFSET + seg.track * (EVENT_BANNER_HEIGHT + EVENT_BANNER_GAP)}px`;
+        bar.style.top = `${metrics.topOffset + seg.track * (metrics.bannerHeight + EVENT_BANNER_GAP)}px`;
         // 이어지는 것처럼 보이려면, 실제 시작/끝인 쪽만 둥글고 안쪽 여백을 주고
         // 나머지 이어지는 쪽은 칸 끝까지 꽉 채운다(day-cell이 overflow:hidden 이라
         // 칸 밖으로 삐져나가게 하면 잘려서, 대신 칸 사이 gap 만큼만 자연스러운 틈이 남는다).
@@ -343,7 +361,38 @@ function updateNoticeInputState() {
   memoText.placeholder = enabled ? '메모를 입력하세요...' : '구글 로그인 후 메모를 작성할 수 있어요';
 }
 
+// Every page uses the same existing Google login action, including the calendar footer.
+async function signInWithGoogle() {
+  if (googleSignInPending || isGoogleSignedIn) return;
+  googleSignInPending = true;
+  googleSignInError = '';
+  renderGoogleStatus();
+  try {
+    await window.api.googleSignIn();
+    isGoogleSignedIn = true;
+    currentUser = await window.api.getCurrentUser();
+    updateNoticeInputState();
+    renderMemos();
+    renderCalendar();
+  } catch (err) {
+    console.error('구글 로그인 실패:', err);
+    googleSignInError = '로그인을 완료하지 못했어요. Google 로그인을 눌러 다시 시도해주세요.';
+  } finally {
+    googleSignInPending = false;
+    renderGoogleStatus();
+  }
+}
+
 function renderGoogleStatus() {
+  const banner = document.getElementById('google-signin-banner');
+  const signInButton = document.getElementById('google-signin-button');
+  banner.classList.toggle('hidden', isGoogleSignedIn);
+  signInButton.disabled = googleSignInPending;
+  signInButton.textContent = googleSignInPending ? '로그인 대기 중…' : 'Google 로그인';
+  signInButton.onclick = signInWithGoogle;
+  document.getElementById('google-signin-message').textContent = googleSignInPending
+    ? '브라우저에서 Google 로그인을 완료해주세요.'
+    : googleSignInError || 'Google 계정을 연결하면 일정과 메모를 불러와요.';
   googleStatus.innerHTML = '';
   const label = document.createElement('span');
 
@@ -365,24 +414,9 @@ function renderGoogleStatus() {
   } else {
     label.textContent = '구글 로그인이 필요합니다 (캘린더 + 메모)';
     const btn = document.createElement('button');
-    btn.textContent = '로그인';
-    btn.onclick = async () => {
-      btn.disabled = true;
-      btn.textContent = '로그인 대기 중...';
-      try {
-        await window.api.googleSignIn();
-        isGoogleSignedIn = true;
-        currentUser = await window.api.getCurrentUser();
-        renderGoogleStatus();
-        updateNoticeInputState();
-        renderMemos();
-        renderCalendar();
-      } catch (err) {
-        console.error('구글 로그인 실패:', err);
-        btn.disabled = false;
-        btn.textContent = '로그인';
-      }
-    };
+    btn.textContent = googleSignInPending ? '로그인 대기 중...' : '로그인';
+    btn.disabled = googleSignInPending;
+    btn.onclick = signInWithGoogle;
     googleStatus.appendChild(label);
     googleStatus.appendChild(btn);
   }
@@ -1393,6 +1427,7 @@ document.getElementById('admin-save-btn').onclick = async () => {
 
 document.getElementById('settings-close').onclick = () => {
   applyTheme(lastSavedTheme); // discard any unsaved live-preview changes
+  if (typeof currentGridStart !== 'undefined' && currentGridStart) buildCalendarGrid();
   settingsPanel.classList.add('hidden');
 };
 
@@ -1618,7 +1653,10 @@ COLOR_FIELDS.forEach((f) => {
   if (el) el.addEventListener('input', () => applyTheme(currentThemeFromForm()));
 });
 [themeFontSelect, themeDateFontSizeSelect, themeEventFontSizeSelect].forEach((el) => {
-  el.addEventListener('change', () => applyTheme(currentThemeFromForm()));
+  el.addEventListener('change', () => {
+    applyTheme(currentThemeFromForm());
+    if (typeof currentGridStart !== 'undefined' && currentGridStart && el !== themeFontSelect) buildCalendarGrid();
+  });
 });
 themeBoldCheckbox.addEventListener('change', () => applyTheme(currentThemeFromForm()));
 
@@ -1627,6 +1665,7 @@ themeResetBtn.onclick = async () => {
   lastSavedTheme = {};
   applyTheme({});
   fillThemeInputs({});
+  if (typeof currentGridStart !== 'undefined' && currentGridStart) buildCalendarGrid();
 };
 
 window.api.onMemosUpdate((updated) => {
@@ -1701,6 +1740,7 @@ const CHULGO_NONPARTNER_COMPANIES = [
 
 const CHULGO_COLS = [
   { key: 'finType', label: '금융정보', type: 'select', options: ['리스', '렌트', '할부', '일시불', '기타'], w: 90 },
+  { key: 'dbType', label: 'DB 유형', type: 'text', w: 90 },
   { key: 'name', label: '고객명', type: 'text', w: 150 },
   { key: 'car', label: '차종', type: 'text', w: 120 },
   // 출고현황/정산서 엑셀에 이미 차량가액으로 매핑되고 있던 필드(vehiclePrice)를
@@ -1717,7 +1757,6 @@ const CHULGO_COLS = [
   // 퍼센트로 표현하는 걸 못 써서(재광님 확인), 계약기간/주행거리처럼 자유 텍스트로 되돌렸다.
   { key: 'initialFunds', label: '초기자금', type: 'text', w: 150 },
   { key: 'status', label: '투입여부', type: 'select', options: ['-', '예정', '완료'], w: 90 },
-  { key: 'dbType', label: '디비유형', type: 'text', w: 66 },
 ];
 
 // 정산서에만 쓰이는 값들 — 장부 표에서 바로 켜고 끌 수 있어야 나중에 대조하기 쉬워서
@@ -1820,7 +1859,13 @@ function chulgoEntriesEqual(a, b) {
   return a.every((ea) => {
     const eb = bMap.get(ea.id);
     if (!eb) return false;
-    return Object.keys(ea).every((k) => {
+    // Ignore persistence metadata if a snapshot source includes it. The main
+    // process currently strips these fields, but imported/preview snapshots may
+    // carry them; neither field changes what this ledger displays.
+    const visibleKeys = new Set([...Object.keys(ea), ...Object.keys(eb)]);
+    visibleKeys.delete('updatedAt');
+    visibleKeys.delete('createdAt');
+    return [...visibleKeys].every((k) => {
       const va = ea[k];
       const vb = eb[k];
       // expenses/paybacks/extraFees/promoItems/agencyFeeItems는 배열이라, Firestore
@@ -1828,6 +1873,9 @@ function chulgoEntriesEqual(a, b) {
       // 항상 "다르다"고 나와서 이 함수가 사실상 아무것도 걸러내지 못했다(그래서 매
       // 저장마다 표 전체가 다시 그려지며 방금 누른 칸의 포커스가 날아갔다).
       if (Array.isArray(va) || Array.isArray(vb)) {
+        return JSON.stringify(va) === JSON.stringify(vb);
+      }
+      if (va && vb && typeof va === 'object' && typeof vb === 'object') {
         return JSON.stringify(va) === JSON.stringify(vb);
       }
       return va === vb;
@@ -1918,7 +1966,9 @@ chulgoPanel.addEventListener('click', (ev) => {
   if (ev.target.closest('.chulgo-blurrable')) chulgoToggleBlur();
 });
 
+let chulgoStatsMarkup = '';
 function renderChulgoStats() {
+  window.ledgerUI?.refresh();
   const totalCount = chulgoEntries.length;
   const doneCount = chulgoEntries.filter((e) => e.status === '완료').length;
   const pendingCount = chulgoEntries.filter((e) => e.status === '예정').length;
@@ -1933,7 +1983,7 @@ function renderChulgoStats() {
   // 최신 정산/핀테크 대시보드(토스·스트라이프류)처럼, 가장 중요한 숫자(이번 달 수수료)를
   // 큼직하게 하나로 강조하고 나머지(전체/완료/예정)는 그 옆에 작은 지표 칩으로 붙인다 —
   // 예전의 "네모 4개 균등 배치"보다 뭐가 중요한 숫자인지 한눈에 들어온다.
-  chulgoStatRow.innerHTML = `
+  const statsHTML = `
     <div class="chulgo-hero">
       <div class="chulgo-hero-main">
         <div class="chulgo-hero-label">이번 달 공제 후 총수수료 합계</div>
@@ -1946,6 +1996,10 @@ function renderChulgoStats() {
       </div>
     </div>
   `;
+  if (chulgoStatsMarkup !== statsHTML) {
+    chulgoStatsMarkup = statsHTML;
+    chulgoStatRow.innerHTML = statsHTML;
+  }
 }
 
 // 투입여부처럼 배지(알약) 모양으로 보여주는 select 칸들 — 색이 상태를 뜻하는
@@ -2108,15 +2162,36 @@ document.getElementById('force-update-btn').addEventListener('click', () => {
 // 되돌리는 일도 막는다.
 const chulgoWriteTails = new Map();
 const chulgoPendingPatches = new Map();
+const CHULGO_MAX_PARALLEL_WRITES = 3;
+let chulgoActiveWrites = 0;
+const chulgoWaitingWrites = [];
 
-function chulgoUpdateFields(id, patch) {
+function chulgoPumpWrites() {
+  while (chulgoActiveWrites < CHULGO_MAX_PARALLEL_WRITES && chulgoWaitingWrites.length) {
+    const { work, resolve, reject } = chulgoWaitingWrites.shift();
+    chulgoActiveWrites += 1;
+    Promise.resolve().then(work).then(resolve, reject).finally(() => {
+      chulgoActiveWrites -= 1;
+      chulgoPumpWrites();
+    });
+  }
+}
+
+function chulgoWithWriteSlot(work) {
+  return new Promise((resolve, reject) => {
+    chulgoWaitingWrites.push({ work, resolve, reject });
+    chulgoPumpWrites();
+  });
+}
+
+function chulgoUpdateFields(id, patch, options = {}) {
   if (!id || !patch || !Object.keys(patch).length) return Promise.resolve();
   const optimistic = chulgoPendingPatches.get(id) || {};
   Object.assign(optimistic, patch);
   chulgoPendingPatches.set(id, optimistic);
 
   const previous = chulgoWriteTails.get(id) || Promise.resolve();
-  const task = previous.catch(() => {}).then(async () => {
+  const task = previous.catch(() => {}).then(() => chulgoWithWriteSlot(async () => {
     try {
       await window.api.updateChulgoEntry({ id, ...patch });
       const pending = chulgoPendingPatches.get(id);
@@ -2136,8 +2211,9 @@ function chulgoUpdateFields(id, patch) {
       }
       console.error('출고 건 수정 실패:', err);
       showToast(chulgoFriendlyError(err));
+      if (options.throwOnError) throw err;
     }
-  });
+  }));
   chulgoWriteTails.set(id, task);
   task.finally(() => {
     if (chulgoWriteTails.get(id) === task) chulgoWriteTails.delete(id);
@@ -2188,6 +2264,7 @@ function renderChulgo() {
       <td class="chulgo-computed chulgo-blurrable${chulgoAmountsBlurred ? ' chulgo-blurred' : ''}" title="클릭해서 가리기/보이기">${chulgoWon(chulgoComputedFee(e))}</td>
       <td>
         <div class="chulgo-row-actions">
+          <button class="chulgo-edit-btn" data-id="${e.id}" title="출고 기록 수정" aria-label="출고 기록 수정">✎</button>
           <button class="chulgo-settle-btn${chulgoHasSettleDetail(e) ? ' has-memo' : ''}" data-id="${e.id}" title="정산 상세 (비용 항목 / 페이백 / 메모)">💰</button>
           <button class="chulgo-memo-btn${e.memo ? ' has-memo' : ''}" data-id="${e.id}" title="메모 (계약기간/주행거리/초기자금)">📝</button>
           <button class="chulgo-del-btn" data-id="${e.id}" title="삭제">✕</button>
@@ -3063,6 +3140,7 @@ const chulgoAiFillStatus = document.getElementById('chulgo-ai-fill-status');
 const chulgoAiFillPreviewEl = document.getElementById('chulgo-ai-fill-preview');
 const chulgoAiFillApplyBtn = document.getElementById('chulgo-ai-fill-apply');
 let chulgoAiFillResult = null;
+let chulgoAiRequest = 0;
 
 function chulgoAiFillItemsHTML(label, items) {
   if (!items || !items.length) return '';
@@ -3077,6 +3155,7 @@ function chulgoAiFillItemsHTML(label, items) {
 
 function chulgoAiFillBasicFieldsHTML(r) {
   let html = '';
+  if (r.dbType) html += `<div class="chulgo-ai-fill-row"><strong>DB 유형</strong><div>${escapeHtml(r.dbType)}</div></div>`;
   if (r.name) html += `<div class="chulgo-ai-fill-row"><strong>고객명</strong><div>${escapeHtml(r.name)}</div></div>`;
   if (r.car) html += `<div class="chulgo-ai-fill-row"><strong>차종</strong><div>${escapeHtml(r.car)}</div></div>`;
   if (r.company) {
@@ -3109,6 +3188,7 @@ function chulgoAiFillFinancialFieldsHTML(r) {
 function chulgoAiFillBuildPayload(r) {
   const payload = {};
   if (r.name != null) payload.name = r.name;
+  if (r.dbType != null) payload.dbType = r.dbType;
   if (r.car != null) payload.car = r.car;
   if (r.company != null) {
     payload.company = r.company;
@@ -3149,6 +3229,9 @@ function chulgoAiFillBuildPayload(r) {
 }
 
 document.getElementById('chulgo-ai-fill-btn').addEventListener('click', () => {
+  chulgoAiRequest += 1;
+  document.getElementById('chulgo-ai-fill-analyze').disabled = false;
+  chulgoAiFillApplyBtn.textContent = '입력칸으로 가져오기';
   chulgoAiFillText.value = '';
   chulgoAiFillStatus.textContent = '';
   chulgoAiFillPreviewEl.innerHTML = '';
@@ -3158,10 +3241,13 @@ document.getElementById('chulgo-ai-fill-btn').addEventListener('click', () => {
 });
 
 document.getElementById('chulgo-ai-fill-cancel').addEventListener('click', () => {
+  chulgoAiRequest += 1;
   chulgoAiFillPopup.classList.add('hidden');
 });
 
 document.getElementById('chulgo-ai-fill-analyze').addEventListener('click', async () => {
+  const analyzeButton = document.getElementById('chulgo-ai-fill-analyze');
+  if (analyzeButton.disabled) return;
   const text = chulgoAiFillText.value.trim();
   if (!text) {
     chulgoAiFillStatus.textContent = '내용을 입력해주세요.';
@@ -3178,6 +3264,8 @@ document.getElementById('chulgo-ai-fill-analyze').addEventListener('click', asyn
   chulgoAiFillApplyBtn.disabled = true;
   chulgoAiFillResult = null;
 
+  const request = ++chulgoAiRequest;
+  analyzeButton.disabled = true;
   try {
     const result = await window.api.aiFillChulgo({
       text,
@@ -3185,6 +3273,7 @@ document.getElementById('chulgo-ai-fill-analyze').addEventListener('click', asyn
       companyList: CHULGO_COMPANY_LIST,
       financeAliases: CHULGO_FINANCE_ALIAS,
     });
+    if (request !== chulgoAiRequest) return;
 
     if (result.action === 'create') {
       chulgoAiFillResult = result;
@@ -3199,6 +3288,7 @@ document.getElementById('chulgo-ai-fill-analyze').addEventListener('click', asyn
     }
 
     if (result.action === 'update') {
+      chulgoAiFillApplyBtn.textContent = '기존 건에 적용';
       const matched = chulgoEntries.find((e) => e.id === result.matchedEntryId);
       if (!matched) {
         chulgoAiFillStatus.textContent = `어느 건인지 확실하지 않아요. 고객명/차종을 더 명확히 적어주세요.${result.notes ? ` (${result.notes})` : ''}`;
@@ -3218,10 +3308,13 @@ document.getElementById('chulgo-ai-fill-analyze').addEventListener('click', asyn
     // action === 'unclear' — 새 건인지 기존 건 수정인지 AI가 확신 못 함. 억지로 적용하지 않는다.
     chulgoAiFillStatus.textContent = `새 건 추가인지 기존 건 수정인지 확실하지 않아요.${result.notes ? ` (${result.notes})` : ' "새로 추가해줘" 처럼 명확히 적어주세요.'}`;
   } catch (err) {
+    if (request !== chulgoAiRequest) return;
     console.error('AI 분석 실패:', err);
     chulgoAiFillStatus.textContent = (err.message || '').includes('OPENAI_NOT_CONFIGURED')
       ? 'OpenAI API 키가 아직 설정되지 않았습니다. config/config.json의 openai.apiKey를 채워주세요.'
       : `분석 실패: ${err.message || '알 수 없는 오류'}`;
+  } finally {
+    if (request === chulgoAiRequest) analyzeButton.disabled = false;
   }
 });
 
@@ -3240,6 +3333,11 @@ document.getElementById('chulgo-ai-fill-apply').addEventListener('click', async 
     // 엉뚱한 값을 매핑하다 오류나는 것보다, 새로 만드는 건에 한해 'X'(해당없음)로
     // 비워둔다(기존 건 업데이트는 여기 안 타서 이미 적어둔 값을 지우지 않는다).
     if (!payload.mileage) payload.mileage = 'X';
+    if (window.ledgerUI) {
+      chulgoAiFillPopup.classList.add('hidden');
+      window.ledgerUI.openDraft(payload);
+      return;
+    }
     try {
       await window.api.createChulgoEntry(payload);
     } catch (err) {
@@ -3855,6 +3953,7 @@ function chulgoBindResizers() {
 }
 
 document.getElementById('chulgo-add-row').addEventListener('click', async (ev) => {
+  if (window.ledgerUI) { window.ledgerUI.openDraft(); return; }
   // 연타하면 Firestore 왕복이 끝나기 전에 order가 같은 빈 행이 여러 개 생길 수 있어서,
   // 요청이 끝날 때까지 버튼을 잠근다(기능/데이터 구조는 그대로, 중복 제출만 막는다).
   const btn = ev.currentTarget;
@@ -3997,31 +4096,45 @@ chulgoPhoneInput.addEventListener('change', async () => {
 // 그리기를 미뤄놨다가, 입력칸에서 손을 떼는 순간(blur) 반영한다.
 let chulgoRenderDeferred = false;
 let chulgoPointerActive = false;
+let chulgoRenderTimer = null;
 
 function chulgoIsEditing() {
   const active = document.activeElement;
-  return chulgoPointerActive || (!!active && chulgoTableWrap.contains(active)
-    && (active.tagName === 'INPUT' || active.tagName === 'SELECT' || active.tagName === 'TEXTAREA'));
+  return chulgoPointerActive
+    || !!document.querySelector('.chulgo-mini-overlay:not(.hidden)')
+    || (!!active && (active.tagName === 'INPUT' || active.tagName === 'SELECT'
+      || active.tagName === 'TEXTAREA' || active.isContentEditable));
 }
 
 function chulgoRenderWhenIdle() {
+  chulgoRenderDeferred = true;
+  clearTimeout(chulgoRenderTimer);
   if (chulgoIsEditing()) {
-    chulgoRenderDeferred = true;
     return;
   }
-  chulgoRenderDeferred = false;
-  renderChulgo();
+  // Several Firestore echoes can arrive between two clicks. Paint the latest
+  // state once, after the next field has had time to take focus.
+  chulgoRenderTimer = setTimeout(() => {
+    chulgoRenderTimer = null;
+    if (chulgoIsEditing()) return;
+    chulgoRenderDeferred = false;
+    if (!chulgoPanel.classList.contains('hidden')) renderChulgo();
+  }, 140);
 }
 
-// focusout 은 표 안의 입력칸에서 포커스가 빠질 때마다 올라온다 — 미뤄둔 갱신을 그때 반영.
-chulgoTableWrap.addEventListener('focusout', () => {
+// Keep every editor responsive, including the AI popup, then apply the newest
+// snapshot once the user leaves the editor or closes a popup.
+document.addEventListener('focusout', () => {
   if (!chulgoRenderDeferred) return;
   setTimeout(() => {
-    if (chulgoRenderDeferred && !chulgoIsEditing()) {
-      chulgoRenderDeferred = false;
-      renderChulgo();
-    }
+    if (chulgoRenderDeferred) chulgoRenderWhenIdle();
   }, 0);
+});
+const chulgoPopupObserver = new MutationObserver(() => {
+  if (chulgoRenderDeferred) chulgoRenderWhenIdle();
+});
+document.querySelectorAll('.chulgo-mini-overlay').forEach((popup) => {
+  chulgoPopupObserver.observe(popup, { attributes: true, attributeFilter: ['class'] });
 });
 
 // 마우스를 누르는 찰나에 스냅샷이 오면 아직 focus가 생기기 전이라 기존 검사만으로는
@@ -4032,8 +4145,23 @@ window.addEventListener('pointerup', () => {
   chulgoPointerActive = false;
   if (chulgoRenderDeferred) chulgoRenderWhenIdle();
 });
+function chulgoReleasePointer() {
+  if (!chulgoPointerActive) return;
+  chulgoPointerActive = false;
+  if (chulgoRenderDeferred) chulgoRenderWhenIdle();
+}
+window.addEventListener('pointercancel', chulgoReleasePointer);
+window.addEventListener('blur', chulgoReleasePointer);
 
+let chulgoSnapshotFrame = 0;
+let chulgoLatestSnapshot = null;
 window.api.onChulgoUpdate((entries) => {
+  chulgoLatestSnapshot = entries;
+  if (chulgoSnapshotFrame) return;
+  chulgoSnapshotFrame = requestAnimationFrame(() => {
+  chulgoSnapshotFrame = 0;
+  const entries = chulgoLatestSnapshot;
+  chulgoLatestSnapshot = null;
   const reconciled = entries.map((entry) => ({ ...entry, ...(chulgoPendingPatches.get(entry.id) || {}) }));
   const changed = !chulgoEntriesEqual(reconciled, chulgoEntries);
   chulgoEntries = reconciled;
@@ -4046,6 +4174,7 @@ window.api.onChulgoUpdate((entries) => {
   } else {
     renderChulgoStats();
   }
+  });
 });
 
 // ─── 고객 리마인더 (몇 달 뒤 다시 연락하기로 한 고객) ─────────────────────────

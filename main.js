@@ -56,6 +56,16 @@ function loadConfig() {
   const configPath = fs.existsSync(CONFIG_PATH) ? CONFIG_PATH : CONFIG_EXAMPLE_PATH;
   const raw = fs.readFileSync(configPath, 'utf-8');
   const config = JSON.parse(raw);
+  if (app.isPackaged) {
+    // The installer preserves an existing installation's private credentials.
+    const privatePath = path.join(app.getPath('userData'), 'private-config.json');
+    try {
+      if (fs.existsSync(privatePath)) {
+        const privateConfig = JSON.parse(fs.readFileSync(privatePath, 'utf8'));
+        if (privateConfig.openai?.apiKey) config.openai = { ...config.openai, apiKey: privateConfig.openai.apiKey };
+      }
+    } catch (_) { console.warn('로컬 AI 설정을 읽지 못했습니다.'); }
+  }
   const isPlaceholder = configPath === CONFIG_EXAMPLE_PATH;
   return { config, isPlaceholder };
 }
@@ -972,6 +982,13 @@ const CHANGELOG = {
     '비교시트를 조건별로 나누고 한쪽을 접을 수 있으며, 작은 창에서는 세로로 배치됩니다',
     '작은 창에서는 날짜 선택 시 일정 상세 카드가 열리고, 긴 일정은 스크롤로 확인할 수 있습니다',
     '기존 Google 로그인·일정·정산장부 데이터와 입력 기능은 그대로 이어집니다',
+  ],
+  '0.39.4': [
+    '장부 입력·수정을 오른쪽 패널로 정리하고 AI 결과를 확인한 뒤 등록할 수 있습니다',
+    '월별 인정 대수 목표와 100%를 넘는 달성률 게이지, 고객명 앞 DB 유형을 추가했습니다',
+    '엑셀·보고·정산 기능을 유지하며 장부 여백과 버튼의 가독성을 다듬었습니다',
+    '출고 장부를 연속으로 수정해도 입력칸과 AI 창이 끊기지 않도록 실시간 갱신과 저장 요청을 정리했습니다',
+    '월간 다이어리의 날짜와 일정 글씨를 각각 최대 30px까지 키울 수 있습니다',
   ],
 };
 
@@ -1939,6 +1956,7 @@ const CHULGO_AI_SYSTEM_PROMPT = `너는 자동차 리스/렌트 판매 수수료
   "matchedEntryId": string | null,
   "matchConfidence": "high" | "medium" | "low" | "none",
   "name": string | null,
+  "dbType": string | null,
   "car": string | null,
   "company": string | null,
   "finType": "리스" | "렌트" | "할부" | "일시불" | "기타" | null,

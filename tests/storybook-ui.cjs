@@ -166,6 +166,7 @@ const { createPreviewServer } = require('../scripts/premium-preview.cjs');
       await refreshEventsAndDayPanel();
       applyTheme({ ...window.__preview.snapshot().theme, dateFontSize: '30', eventFontSize: '30' });
       window.storybookUI.applyTheme({...window.__preview.snapshot().theme,dateFontSize:'30',eventFontSize:'30'});
+      buildCalendarGrid();
     });
     await page.waitForTimeout(200);
     const eventBounds = await page.evaluate(() => {

@@ -13,7 +13,7 @@ function previewBootstrap(appVersion) {
   const month = day(0).slice(0, 7);
   const user = { signedIn: true, uid: 'preview-user', displayName: '미리보기 사용자', email: 'preview@example.invalid', isAdmin: false };
   const store = {
-    signedIn: true, theme: { mode: 'wood', font: null, dateFontSize: '13', eventFontSize: '12', bold: false, cardStyle: 'matte' },
+    signedIn: new URLSearchParams(location.search).get('auth') !== 'signed-out', theme: { mode: 'wood', font: null, dateFontSize: '13', eventFontSize: '12', bold: false, cardStyle: 'matte' },
     calls: [], unhandled: [], events: [],
     memos: [
       { id: 'memo-1', text: '계약 서류 마지막으로 확인하기', done: false, due: `${day(0)}T00:00:00.000Z`, createdAt: '2026-01-01T10:00:00Z' },

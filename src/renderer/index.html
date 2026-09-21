@@ -98,6 +98,11 @@
       ⚠️ Firebase / Google 설정이 필요합니다. <code>config/config.json</code>을 채워주세요. (README 참고)
     </div>
 
+    <section id="google-signin-banner" class="google-signin-banner hidden" aria-label="Google 계정 연결">
+      <div><strong>나의 다이어리를 연결하세요</strong><span id="google-signin-message" role="status">Google 계정을 연결하면 일정과 메모를 불러와요.</span></div>
+      <button type="button" id="google-signin-button">Google 로그인</button>
+    </section>
+
     <section id="journal-world" hidden aria-label="다이어리 풍경">
       <div class="world-hero" id="world-hero">
         <div class="world-art" aria-hidden="true"><canvas class="world-landscape"></canvas><canvas class="world-weather"></canvas><div class="world-breathing-light"></div></div>
@@ -569,6 +574,13 @@
           <option value="14">14px</option>
           <option value="15">15px</option>
           <option value="16">16px</option>
+          <option value="18">18px</option>
+          <option value="20">20px</option>
+          <option value="22">22px</option>
+          <option value="24">24px</option>
+          <option value="26">26px</option>
+          <option value="28">28px</option>
+          <option value="30">30px</option>
         </select>
       </div>
       <div class="theme-row">
@@ -579,6 +591,15 @@
           <option value="10">10px</option>
           <option value="11">11px</option>
           <option value="12">12px</option>
+          <option value="14">14px</option>
+          <option value="16">16px</option>
+          <option value="18">18px</option>
+          <option value="20">20px</option>
+          <option value="22">22px</option>
+          <option value="24">24px</option>
+          <option value="26">26px</option>
+          <option value="28">28px</option>
+          <option value="30">30px</option>
         </select>
       </div>
       <label class="toggle-row small">
@@ -1032,6 +1053,8 @@
   <script src="journal-entry.js"></script>
   <script src="journal.js"></script>
   <script src="renderer.js"></script>
+  <link rel="stylesheet" href="ledger-ui.css">
+  <script src="ledger-ui.js"></script>
   <script src="storybook.js"></script>
 </body>
 </html>

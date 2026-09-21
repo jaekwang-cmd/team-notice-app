@@ -440,7 +440,7 @@
  drawDecorations(t);
  }
 
- function animate(now){if(!enabled||!state.motion||state.collapsed||!visible||document.hidden){frame=0;return}if(now-lastFrame>40){if(lastTick)timeline+=Math.min((now-lastTick)/1000,.1);lastTick=now;drawMotion(timeline);lastFrame=now}frame=requestAnimationFrame(animate)}
+ function animate(now){if(!enabled||!state.motion||state.collapsed||!visible||document.hidden){frame=0;return}const active=document.activeElement;const editing=active&&(active.matches('input, textarea, select')||active.isContentEditable);if(now-lastFrame>(editing?80:40)){if(lastTick)timeline+=Math.min((now-lastTick)/1000,.1);lastTick=now;drawMotion(timeline);lastFrame=now}frame=requestAnimationFrame(animate)}
  function syncAnimation(){if(frame)cancelAnimationFrame(frame);frame=0;lastTick=0;const playing=enabled&&state.motion&&!state.collapsed&&visible&&!document.hidden;root.dataset.playing=String(playing);if(playing)frame=requestAnimationFrame(animate)}
  function render(){
   root.hidden=!enabled;

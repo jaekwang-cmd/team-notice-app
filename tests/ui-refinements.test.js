@@ -92,6 +92,30 @@ test('settlement edits on one row are serialized and the latest optimistic value
   assert.equal(context.pending.has('row-1'), false);
 });
 
+test('many row edits keep Firestore writes bounded without losing queued values', async () => {
+  const calls = [], releases = [];
+  const context = {
+    Map, Object, Promise, console,
+    window: { api: { updateChulgoEntry(payload) { calls.push(payload); return new Promise(resolve => releases.push(resolve)); } } },
+    chulgoFriendlyError: () => 'error', showToast() {},
+  };
+  const start = renderer.indexOf('const chulgoWriteTails = new Map();');
+  const end = renderer.indexOf('\nfunction renderChulgo()', start);
+  vm.runInNewContext(`${renderer.slice(start, end)}\nglobalThis.pending = chulgoPendingPatches;`, context);
+  const writes = Array.from({ length: 9 }, (_, index) => context.chulgoUpdateField(`row-${index}`, 'name', `고객 ${index}`));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.length, 3);
+  assert.equal(context.pending.size, 9);
+  while (releases.length || calls.length < 9) {
+    const release = releases.shift();
+    if (release) release();
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  await Promise.all(writes);
+  assert.equal(calls.length, 9);
+  assert.equal(context.pending.size, 0);
+});
+
 test('settlement pill styling keeps its pill class after a value change', () => {
   assert.match(renderer, /classList\.toggle\('chulgo-status-완료'/);
   assert.doesNotMatch(renderer, /el\.className = value === '완료'/);

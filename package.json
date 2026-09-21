@@ -1,6 +1,6 @@
 {
   "name": "team-notice-app",
-  "version": "0.39.3",
+  "version": "0.39.4",
   "description": "일정과 기록, 영업 정산을 담는 개인 다이어리",
   "main": "main.js",
   "private": true,
@@ -32,6 +32,7 @@
     "appId": "com.teamnotice.app",
     "productName": "여백",
     "artifactName": "team-notice-app-setup-${version}.${ext}",
+    "beforePack": "scripts/prepare-public-config.cjs",
     "files": [
       "main.js",
       "preload.js",
@@ -44,7 +45,7 @@
     ],
     "extraResources": [
       {
-        "from": "config",
+        "from": "artifacts/public-release-config",
         "to": "config"
       }
     ],
@@ -59,6 +60,7 @@
       "icon": "build/icon.png"
     },
     "nsis": {
+      "include": "build/preserve-private-config.nsh",
       "oneClick": true,
       "perMachine": false
     }
