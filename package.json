@@ -1,6 +1,6 @@
 {
   "name": "team-notice-app",
-  "version": "0.39.7",
+  "version": "0.39.9",
   "description": "일정과 기록, 영업 정산을 담는 개인 다이어리",
   "main": "main.js",
   "private": true,

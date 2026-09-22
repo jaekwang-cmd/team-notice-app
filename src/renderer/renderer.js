@@ -93,6 +93,7 @@ async function loadGoogleEventsForGrid(gridStart) {
   const multiDay = [];
   try {
     const events = await window.api.googleGetEvents(gridStart.toISOString(), gridEnd.toISOString());
+    if (!isGoogleSignedIn || gridStart.getTime() !== startOfGrid(viewYear, viewMonth).getTime()) return;
     events.forEach((ev) => {
       if (isMultiDayAllDayEvent(ev)) {
         multiDay.push(ev);
@@ -106,8 +107,7 @@ async function loadGoogleEventsForGrid(gridStart) {
     multiDayEvents = multiDay;
   } catch (err) {
     console.error('구글 캘린더 이벤트 로드 실패:', err);
-    eventsByDate = map;
-    multiDayEvents = multiDay;
+    // A failed read must not erase previously displayed events or saved drafts.
   }
 }
 
@@ -337,18 +337,32 @@ function buildCalendarGrid() {
   }
 }
 
-async function renderCalendar() {
+let calendarRefreshRunning = null;
+let calendarRefreshRequested = false;
+function renderCalendar() {
+  calendarRefreshRequested = true;
+  if (calendarRefreshRunning) return calendarRefreshRunning;
+  calendarRefreshRunning = refreshCalendarQueue().finally(() => { calendarRefreshRunning = null; });
+  return calendarRefreshRunning;
+}
+async function refreshCalendarQueue() {
   calendarGrid.setAttribute('aria-busy', 'true');
   try {
+    while (calendarRefreshRequested) {
+    calendarRefreshRequested = false;
+    const year = viewYear, month = viewMonth;
     calendarTitle.textContent = `${viewYear}년 ${viewMonth + 1}월`;
 
-    const holidays = await getHolidays(viewYear);
+    const holidays = await getHolidays(year);
+    if (year !== viewYear || month !== viewMonth) { calendarRefreshRequested = true; continue; }
     currentHolidayMap = new Map(holidays.map((h) => [h.date, h.name]));
 
     currentGridStart = startOfGrid(viewYear, viewMonth);
     await loadGoogleEventsForGrid(currentGridStart);
+    if (year !== viewYear || month !== viewMonth) { calendarRefreshRequested = true; continue; }
 
     buildCalendarGrid();
+    }
   } finally {
     calendarGrid.setAttribute('aria-busy', 'false');
   }
@@ -522,7 +536,7 @@ function memoBuildRow(m) {
   delBtn.title = '삭제';
   delBtn.onclick = async (ev) => {
     ev.stopPropagation();
-    if (!confirm('이 메모를 삭제할까요?')) return;
+    if (!(await confirmCalendarAction('이 메모를 삭제할까요?'))) return;
     try {
       await window.api.deleteMemo(m.id);
     } catch (err) {
@@ -750,6 +764,8 @@ document.addEventListener('click', (e) => {
 
 let selectedDateStr = null;
 let editingEventId = null;
+let eventFormRevision = 0;
+const eventSavesInFlight = new Set();
 let editingTeamEventId = null;
 
 function formatEventTime(ev) {
@@ -809,7 +825,7 @@ function renderDayEventList() {
         const msg = ev.teamEventId
           ? '이 팀 공유 일정을 삭제할까요? (모든 팀원 캘린더에서 삭제됩니다)'
           : '이 일정을 삭제할까요? (구글 캘린더에서도 삭제됩니다)';
-        if (!confirm(msg)) return;
+        if (!(await confirmCalendarAction(msg))) return;
         try {
           if (ev.teamEventId) {
             await window.api.deleteTeamEvent(ev.teamEventId);
@@ -838,6 +854,8 @@ function renderDayEventList() {
 }
 
 function showEventForm(ev) {
+  const revision = ++eventFormRevision;
+  document.getElementById('event-save').disabled = false;
   editingEventId = ev && !ev.teamEventId ? ev.id : null;
   editingTeamEventId = ev && ev.teamEventId ? ev.teamEventId : null;
   eventForm.classList.remove('hidden');
@@ -872,12 +890,14 @@ function showEventForm(ev) {
   // Focusing right after un-hiding (display:none -> visible) can silently no-op
   // before the browser finishes layout — defer to the next frame so it reliably sticks.
   requestAnimationFrame(() => {
+    if (revision !== eventFormRevision || eventForm.classList.contains('hidden')) return;
     eventTitleInput.focus();
     eventTitleInput.select();
   });
 }
 
 function hideEventForm() {
+  eventFormRevision++;
   eventForm.classList.add('hidden');
   eventAddBtn.classList.remove('hidden');
   editingEventId = null;
@@ -910,13 +930,17 @@ function buildEventTimesFromForm() {
 
 eventForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const revision = eventFormRevision;
+  if (eventSavesInFlight.has(revision)) return;
   const summary = eventTitleInput.value.trim();
   if (!summary) return;
 
   const { start, end } = buildEventTimesFromForm();
   const asTeamEvent = !editingEventId && !editingTeamEventId && eventTeamShareCheckbox.checked;
+  const submittedDraft = JSON.stringify([summary, start, end, selectedEventColorId, asTeamEvent]);
 
   const saveBtn = document.getElementById('event-save');
+  eventSavesInFlight.add(revision);
   saveBtn.disabled = true;
   try {
     if (editingTeamEventId) {
@@ -934,15 +958,48 @@ eventForm.addEventListener('submit', async (e) => {
     } else {
       await window.api.googleCreateEvent({ summary, start, end, colorId: selectedEventColorId });
     }
-    hideEventForm();
-    await refreshEventsAndDayPanel();
+    const currentTimes = buildEventTimesFromForm();
+    const currentDraft = JSON.stringify([eventTitleInput.value.trim(), currentTimes.start, currentTimes.end, selectedEventColorId,
+      !editingEventId && !editingTeamEventId && eventTeamShareCheckbox.checked]);
+    if (revision === eventFormRevision && submittedDraft === currentDraft) {
+      hideEventForm();
+      saveBtn.disabled = false;
+    }
+    // Refresh is a read, not part of saving. Never lock the next draft behind it.
+    refreshEventsAndDayPanel().catch(err => {
+      console.error('저장 후 일정 갱신 실패:', err);
+      showToast('일정은 저장됐지만 화면 갱신이 늦어지고 있어요. 새로고침으로 확인해주세요.');
+    });
   } catch (err) {
     console.error('일정 저장 실패:', err);
     showToast(chulgoFriendlyError(err));
   } finally {
-    saveBtn.disabled = false;
+    eventSavesInFlight.delete(revision);
+    if (revision === eventFormRevision) saveBtn.disabled = false;
   }
 });
+
+// Browser confirm() blocks Electron's renderer and can disrupt keyboard focus.
+function confirmCalendarAction(message) {
+  return new Promise(resolve => {
+    const box = document.createElement('dialog');
+    box.className = 'calendar-confirm';
+    const text = document.createElement('p');
+    text.textContent = message;
+    const actions = document.createElement('div');
+    const cancel = document.createElement('button');
+    cancel.textContent = '취소';
+    const accept = document.createElement('button');
+    accept.textContent = '삭제';
+    actions.append(cancel, accept); box.append(text, actions);
+    document.body.appendChild(box);
+    const finish = value => { box.close(); box.remove(); resolve(value); };
+    cancel.onclick = () => finish(false);
+    accept.onclick = () => finish(true);
+    box.addEventListener('cancel', e => { e.preventDefault(); finish(false); });
+    box.showModal(); cancel.focus();
+  });
+}
 
 async function refreshEventsAndDayPanel() {
   // renderCalendar already loads the current grid's events.
@@ -2356,7 +2413,7 @@ function renderChulgo() {
 
   chulgoTableWrap.querySelectorAll('.chulgo-del-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      if (!confirm('이 출고 건을 삭제할까요?')) return;
+      if (!(await confirmCalendarAction('이 출고 건을 삭제할까요?'))) return;
       try {
         await window.api.deleteChulgoEntry(btn.dataset.id);
       } catch (err) {
@@ -4294,7 +4351,7 @@ function reminderBuildRow(r) {
   delBtn.title = '삭제';
   delBtn.onclick = async (ev) => {
     ev.stopPropagation();
-    if (!confirm(`"${r.name || '이 리마인더'}"를 삭제할까요?`)) return;
+    if (!(await confirmCalendarAction(`"${r.name || '이 리마인더'}"를 삭제할까요?`))) return;
     try {
       await window.api.deleteReminder(r.id);
     } catch (err) {
@@ -4842,7 +4899,7 @@ document.getElementById('org-team-save').addEventListener('click', async () => {
 
 document.getElementById('org-team-delete').addEventListener('click', async () => {
   if (!orgTeamEditingId) return;
-  if (!confirm('이 팀을 삭제할까요? (배정된 직원이 있으면 삭제되지 않아요)')) return;
+  if (!(await confirmCalendarAction('이 팀을 삭제할까요? (배정된 직원이 있으면 삭제되지 않아요)'))) return;
   const statusEl = document.getElementById('org-team-status');
   try {
     await window.api.deleteOrgTeam(orgTeamEditingId);
@@ -5138,7 +5195,7 @@ document.getElementById('finance-save').addEventListener('click', async () => {
 
 document.getElementById('finance-delete').addEventListener('click', async () => {
   if (!financeEditingId) return;
-  if (!confirm('이 계정 메모를 삭제할까요?')) return;
+  if (!(await confirmCalendarAction('이 계정 메모를 삭제할까요?'))) return;
   try {
     await window.api.deleteFinanceCredential(financeEditingId);
     document.getElementById('finance-popup').classList.add('hidden');
@@ -5436,8 +5493,8 @@ function compareRenderSheet(idx) {
     });
   });
 
-  el.querySelector('.compare-reset-btn').addEventListener('click', () => {
-    if (!confirm('이 표의 월 납입금과 잔존가치를 모두 지울까요? (계약기간·제목은 그대로 둡니다)')) return;
+  el.querySelector('.compare-reset-btn').addEventListener('click', async () => {
+    if (!(await confirmCalendarAction('이 표의 월 납입금과 잔존가치를 모두 지울까요? (계약기간·제목은 그대로 둡니다)'))) return;
     compareCompanies.forEach((c) => { sheet.rows[c] = compareEmptyRow(); });
     compareSaveSheets();
     compareRenderSheet(idx);
@@ -5463,7 +5520,7 @@ function compareRenderSettingsList() {
       const newName = input.value.trim();
       if (!newName || newName === originalName) { input.value = originalName; return; }
       if (compareCompanies.includes(newName)) {
-        alert('이미 있는 이름이에요.');
+        showToast('이미 있는 이름이에요.');
         input.value = originalName;
         return;
       }
@@ -5471,10 +5528,10 @@ function compareRenderSettingsList() {
     });
   });
   listEl.querySelectorAll('.compare-settings-remove-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const row = btn.closest('.compare-settings-row');
       const name = row.querySelector('.compare-settings-name-input').value;
-      if (!confirm(`"${name}"을(를) 목록에서 삭제할까요? 두 표에 입력해둔 이 금융사 값도 함께 지워집니다.`)) return;
+      if (!(await confirmCalendarAction(`"${name}"을(를) 목록에서 삭제할까요? 두 표에 입력해둔 이 금융사 값도 함께 지워집니다.`))) return;
       compareRemoveCompany(name);
     });
   });
@@ -5506,9 +5563,9 @@ const COMPARE_MAX_COMPANIES = 50; // 끝없이 늘어나면 표/저장 용량도
 function compareAddCompany(name) {
   const trimmed = (name || '').trim();
   if (!trimmed) return;
-  if (compareCompanies.includes(trimmed)) { alert('이미 있는 이름이에요.'); return; }
+  if (compareCompanies.includes(trimmed)) { showToast('이미 있는 이름이에요.'); return; }
   if (compareCompanies.length >= COMPARE_MAX_COMPANIES) {
-    alert(`금융사는 최대 ${COMPARE_MAX_COMPANIES}개까지만 등록할 수 있어요. 안 쓰는 곳을 먼저 지워주세요.`);
+    showToast(`금융사는 최대 ${COMPARE_MAX_COMPANIES}개까지만 등록할 수 있어요. 안 쓰는 곳을 먼저 지워주세요.`);
     return;
   }
   compareCompanies.push(trimmed);

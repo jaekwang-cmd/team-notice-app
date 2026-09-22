@@ -53,7 +53,7 @@
       String(event.start).slice(0, 10) <= key && key < String(event.end).slice(0, 10));
   }
   async function chooseDate(date) {
-    if (selecting || quickBusy || noteBusy) return;
+    if (selecting) return;
     selecting = true;
     const previous = selected;
     const previousYear = viewYear, previousMonth = viewMonth;
@@ -61,7 +61,7 @@
     try {
       if (viewYear !== date.getFullYear() || viewMonth !== date.getMonth()) {
         viewYear = date.getFullYear(); viewMonth = date.getMonth();
-        await renderCalendar();
+        renderCalendar().then(render).catch(() => showToast('일정을 불러오지 못했어요. 입력은 계속할 수 있어요.'));
       }
       render();
     } catch (error) {
@@ -155,7 +155,8 @@
   }
   function syncEntryControls() {
     const disabled = !isGoogleSignedIn;
-    ['journal-quick-title', 'journal-quick-time', 'journal-quick-submit', 'journal-detailed-event'].forEach(id => el(id).disabled = disabled || quickBusy || selecting);
+    ['journal-quick-title', 'journal-quick-time', 'journal-detailed-event'].forEach(id => el(id).disabled = disabled || selecting);
+    el('journal-quick-submit').disabled = disabled || quickBusy || selecting;
     el('journal-quick-submit').textContent = quickBusy ? '저장 중' : '추가';
     el('journal-quick-date').textContent = `${selected.getMonth() + 1}월 ${selected.getDate()}일`;
     el('journal-note-draft').disabled = disabled || noteBusy;
@@ -172,6 +173,9 @@
     try { payload = JournalEntry.buildPayload({ title: el('journal-quick-title').value, date: toDateStr(selected), time: el('journal-quick-time').value }); }
     catch (error) { entryStatus('journal-quick-status', error.message, true); return; }
     quickBusy = true; syncEntryControls();
+    const submittedTitle = el('journal-quick-title').value;
+    const submittedTime = el('journal-quick-time').value;
+    const submittedDate = toDateStr(selected);
     entryStatus('journal-quick-status', '일정과 메모를 기록하고 있어요.');
     try {
       const result = await JournalEntry.create(window.api, payload);
@@ -179,17 +183,19 @@
         entryStatus('journal-quick-status', '일정 저장 결과를 확인하지 못했어요. 월간 다이어리를 확인한 뒤 다시 시도해주세요.', true);
         return;
       }
-      el('journal-quick-title').value = '';
+      if (toDateStr(selected) === submittedDate && el('journal-quick-title').value === submittedTitle && el('journal-quick-time').value === submittedTime) el('journal-quick-title').value = '';
       if (result.status === 'memo-error') {
         entryStatus('journal-quick-status', '일정은 저장했어요. 메모 저장은 확인하지 못했으니 메모장을 확인해주세요.', true);
       } else {
         entryStatus('journal-quick-status', '일정과 메모장에 함께 기록했어요.');
       }
       // Refresh errors must never cause the successfully saved entry to be submitted again.
-      try { await refreshEventsAndDayPanel(); }
-      catch (_) { showToast('일정은 저장됐어요. 최신 목록은 새로고침해주세요.'); }
-      render();
-    } finally { quickBusy = false; syncEntryControls(); el('journal-quick-title').focus(); }
+      refreshEventsAndDayPanel().then(render).catch(() => showToast('일정은 저장됐어요. 최신 목록은 새로고침해주세요.'));
+    } finally {
+      quickBusy = false; syncEntryControls();
+      const active = document.activeElement;
+      if (active === el('journal-quick-submit')) el('journal-quick-title').focus({preventScroll:true});
+    }
   }
   async function saveQuickNote() {
     const text = el('journal-note-draft').value.trim();
