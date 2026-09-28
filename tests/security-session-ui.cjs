@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict');
+const {chromium}=require('@playwright/test');
+const {createPreviewServer}=require('../scripts/premium-preview.cjs');
+(async()=>{const server=createPreviewServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
+try {browser=await chromium.launch({channel:'msedge'});const page=await browser.newPage({viewport:{width:1500,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.goto(`http://127.0.0.1:${server.address().port}/?view=journal`);await page.waitForFunction(()=>typeof financeCredentials!=='undefined'&&currentUser?.uid);
+const result=await page.evaluate(()=>{const value='x" onclick="window.__injected=1" x=" & <hello> \'end';window.__injected=0;myOrgInfo={uid:currentUser.uid,organization:'test',permission:'member'};financeCredentials=[{id:'id" onclick="window.__injected=2',authorUid:currentUser.uid,authorName:'test',siteName:'test',loginId:value,loginPw:value}];renderFinance();const button=financeListWrap.querySelector('[data-copy]');button.click();return {value,copy:button.dataset.copy,injected:window.__injected,handlers:financeListWrap.querySelectorAll('[onclick]').length};});
+assert.equal(result.copy,result.value);assert.equal(result.injected,0);assert.equal(result.handlers,0);
+await page.evaluate(()=>{financeOpenPopup(financeCredentials[0]);orgApplyMyInfo({uid:currentUser.uid,organization:'other',permission:'member'});});
+assert.equal(await page.locator('#finance-login-pw').inputValue(),'');assert.equal(await page.locator('#finance-list-wrap').textContent(),'');
+await page.evaluate(()=>{financeCredentials=[{id:'new',siteName:'new',loginId:'synthetic',loginPw:'synthetic'}];renderFinance();financeOpenPopup(financeCredentials[0]);});await page.evaluate(()=>window.api.googleSignOut());
+await page.waitForFunction(()=>!currentUser?.signedIn&&financeCredentials.length===0);
+assert.equal(await page.locator('#finance-login-pw').inputValue(),'');assert.equal(await page.locator('#finance-login-id').inputValue(),'');assert.equal(await page.locator('#finance-popup').isVisible(),false);assert.equal(await page.locator('#finance-list-wrap').textContent(),'');
+assert.deepEqual(errors,[]);console.log('PASS: quote/markup exact roundtrip without handlers; logout clears credentials, forms and privileged state');
+}finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}})().catch(e=>{console.error(e);process.exitCode=1});

@@ -62,6 +62,9 @@
   drawer.innerHTML = `<section class="ledger-drawer-card" role="dialog" aria-modal="true" aria-labelledby="ledger-entry-title"><header><div><h3 id="ledger-entry-title">새로운 출고 기록</h3><p id="ledger-entry-month"></p></div><button type="button" id="ledger-entry-close" aria-label="입력 패널 닫기">×</button></header><form id="ledger-entry-form"><div id="ledger-entry-fields"></div><footer><p id="ledger-entry-status" role="status"></p><div><button type="button" id="ledger-entry-cancel">취소</button><button type="submit" id="ledger-entry-save">장부에 등록</button></div></footer></form></section>`;
   document.body.append(drawer);
   let editingId = null, original = {}, baseline = {}, draftMonth = '', owner = '', busy = false, returnFocus = null;
+  let revision = 0, retained = false;
+  function lockFields(locked) { drawer.querySelectorAll('input,select,#ledger-entry-save').forEach(el => el.disabled = locked); }
+  function resetSession() { revision++; busy = false; retained = false; owner = ''; drawer.classList.add('hidden'); $('ledger-entry-fields').replaceChildren(); lockFields(false); }
   const schema = Object.fromEntries(CHULGO_COLS.map(c => [c.key, c]));
   const groups = [['고객과 차량', ['dbType','name','car','vehiclePrice']],['금융 · 계약 조건',['finType','company','contractPeriod','mileage','initialFunds','status','deployDate']],['정산 기준',['fee','recognizedUnits','nonPartner','retention','memo']]];
   Object.assign(schema, {
@@ -85,7 +88,10 @@
     return values;
   }
   function openDraft(seed = {}, id = null) {
-    if (busy) return;
+    if (owner && owner !== currentUser?.uid) resetSession();
+    if (retained && owner === currentUser?.uid && editingId === id && (!Object.keys(seed).length || seed.id === editingId)) { drawer.classList.remove('hidden'); return; }
+    if (busy) { showToast('이전 저장 결과를 확인 중입니다. 같은 기록을 다시 등록하지 않도록 기다려주세요.'); return; }
+    revision++; retained = true;
     owner = currentUser?.uid; if (!owner) { showToast('로그인 후 장부를 입력해주세요.'); return; }
     editingId = id; returnFocus = document.activeElement;
     draftMonth = seed.month || chulgoActiveMonth();
@@ -101,12 +107,12 @@
     $('ledger-field-dbType').focus();
   }
   function close() {
-    if (busy) return;
     drawer.classList.add('hidden'); if(returnFocus?.isConnected) returnFocus.focus();
     chulgoRenderWhenIdle();
   }
   $('ledger-entry-close').onclick = close; $('ledger-entry-cancel').onclick = close;
-  drawer.addEventListener('keydown',e=>{
+  document.addEventListener('keydown',e=>{
+    if(drawer.classList.contains('hidden'))return;
     if(e.key==='Escape'){e.preventDefault();close();}
     if(e.key==='Tab') {const nodes=[...drawer.querySelectorAll('input,select,button')].filter(el=>!el.disabled);const first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
   });
@@ -118,24 +124,26 @@
     for(const [key,value] of Object.entries(values)) if(!editingId||value!==baseline[key]) patch[key]=value;
     if(!editingId&&!values.name.trim()&&!values.car.trim()){$('ledger-entry-status').textContent='고객명 또는 차종을 입력해주세요.';return;}
     if('recognizedUnits' in patch)patch.countsQuota=true;
-    busy=true;drawer.querySelectorAll('input,select,button').forEach(el=>el.disabled=true);$('ledger-entry-status').textContent='저장 중…';
+    const submittedRevision = revision, submittedOwner = owner;
+    const isCurrent = () => revision === submittedRevision && currentUser?.uid === submittedOwner;
+    busy=true;lockFields(true);$('ledger-entry-status').textContent='저장 결과 확인 중… 창을 닫아도 처리는 계속되며, 중복 등록은 차단됩니다.';
     let succeeded=false;
     try {
       if(editingId) {
         const row=chulgoEntries.find(x=>x.id===editingId);if(!row)throw new Error('삭제되었거나 더 이상 접근할 수 없는 출고 건입니다.');
-        await chulgoUpdateFields(editingId,patch,{throwOnError:true});Object.assign(row,patch);
+        await chulgoUpdateFields(editingId,patch,{throwOnError:true});if(isCurrent())Object.assign(row,patch);
       } else {
         await window.api.createChulgoEntry({...original,...patch,month:draftMonth,order:chulgoEntries.filter(x=>x.month===draftMonth).length});
       }
       succeeded=true;
-    } catch(err){$('ledger-entry-status').textContent=chulgoFriendlyError(err);}
-    finally{busy=false;drawer.querySelectorAll('input,select,button').forEach(el=>el.disabled=false);}
-    if(succeeded){close();renderChulgo();showToast('장부에 저장했어요.');}
+    } catch(err){if(isCurrent())$('ledger-entry-status').textContent=chulgoFriendlyError(err);}
+    finally{if(isCurrent()){busy=false;lockFields(false);}}
+    if(succeeded && isCurrent()){retained=false;close();renderChulgo();showToast('장부에 저장했어요.');}
   };
   chulgoTableWrap.addEventListener('click', e=>{
     const button=e.target.closest('.chulgo-edit-btn');if(!button)return;
     const row=chulgoEntries.find(x=>x.id===button.dataset.id);if(row)openDraft(row,row.id);
   });
-  window.ledgerUI={refresh,openDraft};
+  window.ledgerUI={refresh,openDraft,resetSession};
   refresh();
 })();

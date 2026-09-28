@@ -1,0 +1,17 @@
+const assert=require('node:assert/strict');
+const {chromium}=require('@playwright/test');
+const {createPreviewServer}=require('../scripts/premium-preview.cjs');
+(async()=>{const s=createPreviewServer();await new Promise(r=>s.listen(0,'127.0.0.1',r));let b;try{
+b=await chromium.launch({channel:'msedge'});const p=await b.newPage({viewport:{width:1500,height:1000}});
+await p.goto(`http://127.0.0.1:${s.address().port}/?view=chulgo`);await p.waitForFunction(()=>currentView==='chulgo'&&chulgoEntries.length===3);
+await p.evaluate(()=>{window.writes=0;window.api.createChulgoEntry=()=>{writes++;return new Promise(r=>window.finishWrite=r)}});
+await p.locator('#chulgo-add-row').click();await p.locator('#ledger-field-name').fill('pending draft');await p.locator('#ledger-entry-save').click();await p.keyboard.press('Escape');assert.equal(await p.locator('#ledger-entry-drawer').isVisible(),false);
+await p.locator('#chulgo-add-row').click();assert.equal(await p.locator('#ledger-field-name').inputValue(),'pending draft');assert.equal(await p.locator('#ledger-entry-save').isDisabled(),true);assert.equal(await p.locator('#ledger-entry-cancel').isDisabled(),false);assert.equal(await p.evaluate(()=>writes),1);
+await p.evaluate(()=>{window.ledgerUI.resetSession();window.ledgerUI.openDraft({name:'new draft'});finishWrite();});assert.equal(await p.locator('#ledger-field-name').inputValue(),'new draft');assert.equal(await p.locator('#ledger-entry-drawer').isVisible(),true);
+await p.locator('#ledger-entry-cancel').click();await p.evaluate(()=>switchView('ai'));
+await p.evaluate(()=>window.api.aiChat=()=>new Promise(r=>window.finishAI=r));await p.locator('#ai-chat-input').fill('old');await p.locator('#ai-chat-send').click();await p.locator('#ai-chat-reset').click();await p.evaluate(()=>finishAI({content:'stale',toolCalls:[{id:'stale',name:'create_memo',arguments:'{}'}]}));assert.equal(await p.evaluate(()=>aiChatHistory.length),0);assert.equal(await p.locator('#ai-chat-input').isDisabled(),false);
+await p.evaluate(()=>{window.imeCalls=0;window.api.aiChat=async()=>{imeCalls++;return {content:'ok'}}});await p.locator('#ai-chat-input').fill('한글');await p.locator('#ai-chat-input').dispatchEvent('keydown',{key:'Enter',isComposing:true,bubbles:true});assert.equal(await p.evaluate(()=>imeCalls),0);
+await p.evaluate(async()=>{window.api.googleCreateEvent=async e=>window.eventPayload=e;await aiChatRunTool('create_personal_event',{date:'2026-09-30',startTime:'23:30',title:'midnight'});});assert.equal(await p.evaluate(()=>eventPayload.end.dateTime),'2026-10-01T00:30:00');
+await p.locator('#ai-chat-reset').click();await p.evaluate(()=>{window.calls=0;window.memoWrites=0;window.api.createMemo=async()=>{memoWrites++};window.api.aiChat=async()=>{calls++;return {content:'',toolCalls:[{id:'different-'+calls,name:'create_memo',arguments:'{"text":"once"}'}]}}});await p.locator('#ai-chat-input').fill('loop');await p.locator('#ai-chat-send').click();await p.waitForFunction(()=>!aiChatBusy);assert.equal(await p.evaluate(()=>memoWrites),1);assert.equal(await p.evaluate(()=>calls),6);assert.match(await p.locator('#ai-chat-messages').textContent(),/작업 수/);
+console.log('PASS ledger pending close/resume/duplicate guard/stale completion; AI reset, IME, midnight rollover, repeated tool deduplication and loop limit');
+}finally{if(b)await b.close();await new Promise(r=>s.close(r));}})().catch(e=>{console.error(e);process.exitCode=1});

@@ -76,6 +76,7 @@ function isMultiDayAllDayEvent(ev) {
 }
 
 async function loadGoogleEventsForGrid(gridStart) {
+  const requestUser = currentUser;
   if (!isGoogleSignedIn) {
     eventsByDate = new Map();
     multiDayEvents = [];
@@ -93,7 +94,7 @@ async function loadGoogleEventsForGrid(gridStart) {
   const multiDay = [];
   try {
     const events = await window.api.googleGetEvents(gridStart.toISOString(), gridEnd.toISOString());
-    if (!isGoogleSignedIn || gridStart.getTime() !== startOfGrid(viewYear, viewMonth).getTime()) return;
+    if (requestUser !== currentUser || !isGoogleSignedIn || gridStart.getTime() !== startOfGrid(viewYear, viewMonth).getTime()) return;
     events.forEach((ev) => {
       if (isMultiDayAllDayEvent(ev)) {
         multiDay.push(ev);
@@ -439,7 +440,7 @@ function renderGoogleStatus() {
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
-  return div.innerHTML;
+  return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // Things/Todoist/MS 투두 같은 유명 할 일 앱들 공통 패턴을 따른다:
@@ -1065,7 +1066,7 @@ syncBtn.onclick = async () => {
 
 memoSend.onclick = sendMemo;
 memoText.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendMemo();
+  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) sendMemo();
 });
 memoAlarmEnable.addEventListener('change', () => {
   memoAlarmTime.classList.toggle('hidden', !memoAlarmEnable.checked);
@@ -1082,6 +1083,7 @@ memoAlarmEnable.addEventListener('change', () => {
 const aiChatMessages = document.getElementById('ai-chat-messages');
 const aiChatInput = document.getElementById('ai-chat-input');
 const aiChatSend = document.getElementById('ai-chat-send');
+let aiChatGeneration = 0, aiChatBusy = false;
 let aiChatHistory = []; // OpenAI에 그대로 보내는 대화 기록 — {role, content, tool_calls?, tool_call_id?}
 
 // 대화가 길어질수록 매 턴 전체 기록을 다시 보내는 비용(전송량 + OpenAI 처리량)이 계속
@@ -1174,11 +1176,13 @@ function aiChatAppendFileResults(keyword, results, total) {
   aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
 }
 
-async function aiChatRunTool(name, args) {
+async function aiChatRunTool(name, args, isCurrent = () => true) {
+  if (!isCurrent()) return '취소된 요청입니다.';
   if (name === 'search_files') {
     const keyword = (args.keyword || '').trim();
     if (!keyword) return '검색어가 없어서 찾지 못했습니다.';
     const { results, total } = await window.api.searchFiles({ keyword, limit: 20 });
+    if (!isCurrent()) return '취소된 요청입니다.';
     if (!total) return `"${keyword}" 로 찾은 파일이 없습니다.`;
     aiChatAppendFileResults(keyword, results, total);
     // AI 에게는 요약만 돌려준다 — 목록은 이미 화면에 그렸고, 경로 전체를 다시
@@ -1209,10 +1213,10 @@ async function aiChatRunTool(name, args) {
     } else {
       const endTime = args.endTime || addHourToTime(args.startTime);
       start = { dateTime: `${args.date}T${args.startTime}:00`, timeZone };
-      end = { dateTime: `${args.date}T${endTime}:00`, timeZone };
+      end = { dateTime: `${endTime <= args.startTime ? addDaysStr(args.date, 1) : args.date}T${endTime}:00`, timeZone };
     }
     await window.api.googleCreateEvent({ summary: args.title || '(제목 없음)', start, end });
-    await refreshEventsAndDayPanel();
+    if (isCurrent()) void refreshEventsAndDayPanel().catch(err => console.error('일정 표시 갱신 실패:', err));
     return `📅 일정 추가함: ${args.title || ''} (${args.date}${args.allDay ? '' : ' ' + (args.startTime || '')})`;
   }
   return '알 수 없는 동작이라 실행하지 않았습니다.';
@@ -1220,7 +1224,13 @@ async function aiChatRunTool(name, args) {
 
 async function aiChatSendMessage() {
   const text = aiChatInput.value.trim();
-  if (!text) return;
+  if (!text || aiChatBusy) return;
+  const generation = aiChatGeneration, uid = currentUser?.uid;
+  const isCurrent = () => generation === aiChatGeneration && uid === currentUser?.uid;
+  aiChatBusy = true;
+  const toolResults = new Map();
+  const writeResults = new Map();
+  let rounds = 0, executed = 0;
 
   aiChatAppendBubble('user', text);
   aiChatHistory.push({ role: 'user', content: text });
@@ -1235,27 +1245,43 @@ async function aiChatSendMessage() {
     let response = await window.api.aiChat({ messages: aiChatHistory, today: toDateStr(new Date()) });
 
     // 모델이 도구를 쓰겠다고 하면 실제로 실행하고, 그 결과를 다시 보내서 최종 답변을 받는다.
+    if (!isCurrent()) return;
     while (response.toolCalls && response.toolCalls.length) {
+      if (++rounds > 5 || executed + response.toolCalls.length > 20) throw new Error('한 번에 실행할 수 있는 작업 수를 넘었습니다. 완료된 작업을 확인한 뒤 나머지를 요청해주세요.');
       aiChatHistory.push({ role: 'assistant', content: response.content || '', tool_calls: response.toolCalls });
       for (const call of response.toolCalls) {
-        let args = {};
+        if (!isCurrent()) return;
+        executed++;
+        let args = {}, parseFailed = false;
         try {
           args = JSON.parse(call.arguments || '{}');
+          if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('잘못된 작업 인자');
         } catch (parseErr) {
+          parseFailed = true;
           console.error('AI 도구 인자 파싱 실패:', parseErr);
         }
         let resultText;
+        const writeKey = ['create_personal_event', 'create_memo'].includes(call.name) && !parseFailed
+          ? JSON.stringify([call.name, Object.fromEntries(Object.keys(args).sort().map(key => [key, args[key]]))]) : null;
         try {
-          resultText = await aiChatRunTool(call.name, args);
+          if (parseFailed) throw new Error('작업 인자를 해석하지 못해 실행하지 않았습니다.');
+          if (!call.id) throw new Error('실행 식별자가 없는 작업은 처리하지 않았습니다.');
+          if (toolResults.has(call.id)) resultText = toolResults.get(call.id);
+          else if (writeKey && writeResults.has(writeKey)) resultText = writeResults.get(writeKey);
+          else { resultText = await aiChatRunTool(call.name, args, isCurrent); toolResults.set(call.id, resultText); if (writeKey) writeResults.set(writeKey, resultText); }
         } catch (err) {
           console.error('AI 도구 실행 실패:', err);
           resultText = `실패: ${err.message || err}`;
+          if (call.id) toolResults.set(call.id, resultText);
+          if (writeKey) writeResults.set(writeKey, resultText);
         }
+        if (!isCurrent()) return;
         thinkingBubble.className = 'ai-chat-msg system-action';
         thinkingBubble.textContent = resultText;
         aiChatHistory.push({ role: 'tool', tool_call_id: call.id, content: resultText });
       }
       response = await window.api.aiChat({ messages: aiChatHistory, today: toDateStr(new Date()) });
+      if (!isCurrent()) return;
     }
 
     aiChatHistory.push({ role: 'assistant', content: response.content || '' });
@@ -1265,12 +1291,15 @@ async function aiChatSendMessage() {
       thinkingBubble.textContent = response.content || '(응답 없음)';
     }
   } catch (err) {
+    if (!isCurrent()) return;
     console.error('AI 대화 실패:', err);
     thinkingBubble.className = 'ai-chat-msg error';
     thinkingBubble.textContent = (err.message || '').includes('OPENAI_NOT_CONFIGURED')
       ? 'OpenAI API 키가 아직 설정되지 않았습니다. config/config.json의 openai.apiKey를 채워주세요.'
       : `오류: ${err.message || '알 수 없는 오류'}`;
   } finally {
+    if (!isCurrent()) return;
+    aiChatBusy = false;
     aiChatInput.disabled = false;
     aiChatSend.disabled = false;
     // AI 응답은 수십 초 뒤에 올 수도 있다. 그 사이 사용자가 장부나 메모에 타이핑을
@@ -1279,13 +1308,13 @@ async function aiChatSendMessage() {
     const active = document.activeElement;
     const typingElsewhere = active && active !== aiChatInput
       && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT');
-    if (!typingElsewhere) aiChatInput.focus();
+    if (!typingElsewhere && (active === aiChatSend || active === aiChatInput)) aiChatInput.focus();
   }
 }
 
 aiChatSend.addEventListener('click', aiChatSendMessage);
 aiChatInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
     e.preventDefault();
     aiChatSendMessage();
   }
@@ -1293,10 +1322,13 @@ aiChatInput.addEventListener('keydown', (e) => {
 
 // 대화가 쌓이면 맥락이 길어져서 엉뚱한 답이 나오기 쉽다 — 새로 시작하고 싶을 때 누르는 버튼.
 // (참고로 프로그램을 껐다 켜면 어차피 대화 기록은 메모리에만 있어서 자동으로 비워진다.)
-document.getElementById('ai-chat-reset').addEventListener('click', () => {
+function aiChatResetSession() {
+  aiChatGeneration++; aiChatBusy = false;
+  aiChatInput.disabled = false; aiChatSend.disabled = false; aiChatInput.value = '';
   aiChatHistory = [];
   aiChatMessages.innerHTML = '<div class="ai-chat-empty">뭐든 편하게 물어보세요. "내일 3시 미팅 캘린더에 추가해줘"처럼 말하면 실제로 추가도 해드려요.</div>';
-});
+}
+document.getElementById('ai-chat-reset').addEventListener('click', aiChatResetSession);
 
 // 일정/AI 패널 폭을 드래그로 조절 — 장부 표 칸 너비 조절과 같은 방식, 다음에 켜도 기억한다.
 const DAY_PANEL_WIDTH_KEY = 'day_panel_width_v1';
@@ -1751,12 +1783,36 @@ document.getElementById('memo-alarm-close').addEventListener('click', () => {
 });
 
 window.api.onAuthUpdated(async (user) => {
+  const changed = currentUser?.uid !== user?.uid;
   currentUser = user;
+  if (changed || !user?.signedIn) {
+    aiChatResetSession();
+    window.ledgerUI?.resetSession();
+    financeCredentials = [];
+    financeEditingId = null;
+    financeSearchQuery = '';
+    financeSearchInput.value = '';
+    for (const id of ['finance-site-name', 'finance-author-name', 'finance-login-id', 'finance-login-pw']) document.getElementById(id).value = '';
+    document.getElementById('finance-popup').classList.add('hidden');
+    document.getElementById('finance-status').textContent = '';
+    orgApplyMyInfo(null);
+    renderFinance();
+    memos = []; eventsByDate = new Map(); multiDayEvents = [];
+    isGoogleSignedIn = false;
+    orgMembersCache = []; orgTeamsCache = [];
+    orgListWrap.replaceChildren(); orgLedgerWrap.replaceChildren(); orgLedgerSummaryEl.textContent = '';
+    document.getElementById('org-history-list').replaceChildren();
+    document.querySelectorAll('[id^="org-"][id$="popup"]').forEach(el => { el.classList.add('hidden'); el.querySelectorAll('input,textarea').forEach(input => { input.value = ''; }); });
+    hideEventForm();
+    if (['finance', 'org'].includes(currentView)) switchView('journal');
+  }
   // "로그인됨" 표시는 이 앱 자체 계정(Firebase) 상태가 아니라, 실제로 구글 캘린더/할 일
   // 권한이 지금 살아있는지를 따로 확인해서 보여준다 — 둘은 서로 다른 시스템이라, Firebase는
   // 로그인된 채로 구글 캘린더 권한만 없어진 경우(예: 권한 추가로 자동 로그아웃된 뒤 아직
   // 재로그인 전)에도 "로그인됨"으로 잘못 뜨는 걸 막는다.
-  isGoogleSignedIn = await window.api.googleIsSignedIn();
+  const signedIn = await window.api.googleIsSignedIn();
+  if (currentUser !== user) return;
+  isGoogleSignedIn = signedIn;
   renderGoogleStatus();
   updateNoticeInputState();
   renderMemos();
@@ -2076,12 +2132,12 @@ function chulgoCellHTML(e, col) {
     const statusCls = val === '완료' ? 'chulgo-status-완료' : val === '예정' ? 'chulgo-status-예정' : '';
     const pillCls = CHULGO_PILL_COLS.includes(col.key) ? 'chulgo-pill-select' : '';
     const cls = [statusCls, pillCls].filter(Boolean).join(' ');
-    return `<select class="${cls}" data-id="${e.id}" data-key="${col.key}">${opts}</select>`;
+    return `<select class="${cls}" data-id="${escapeHtml(e.id)}" data-key="${col.key}">${opts}</select>`;
   }
   if (col.type === 'money') {
-    return `<input class="chulgo-money" type="text" inputmode="numeric" data-id="${e.id}" data-key="${col.key}" value="${chulgoFormatMoneyDisplay(val)}" placeholder="0">`;
+    return `<input class="chulgo-money" type="text" inputmode="numeric" data-id="${escapeHtml(e.id)}" data-key="${col.key}" value="${chulgoFormatMoneyDisplay(val)}" placeholder="0">`;
   }
-  return `<input type="text" data-id="${e.id}" data-key="${col.key}" value="${(val || '').toString().replace(/"/g, '&quot;')}">`;
+  return `<input type="text" data-id="${escapeHtml(e.id)}" data-key="${col.key}" value="${(val || '').toString().replace(/"/g, '&quot;')}">`;
 }
 
 function chulgoBuildColgroup() {
@@ -2311,23 +2367,23 @@ function renderChulgo() {
   const rows = list
     .map(
       (e) => `
-    <tr data-row-id="${e.id}" class="${e.id === chulgoSelectedId ? 'selected' : ''}">
+    <tr data-row-id="${escapeHtml(e.id)}" class="${e.id === chulgoSelectedId ? 'selected' : ''}">
       <td class="chulgo-drag-handle" draggable="true" title="드래그해서 순서 변경">⠿</td>
-      <td class="chulgo-check-cell"><input type="checkbox" class="chulgo-nonpartner-check" data-id="${e.id}" ${e.nonPartner ? 'checked' : ''} title="비제휴 (대수 인정 제외, 정산서에서 별도 묶음)"></td>
-      <td class="chulgo-check-cell"><input type="checkbox" class="chulgo-retention-check" data-id="${e.id}" ${e.retention ? 'checked' : ''} title="리텐션 (정산서 S열 차감 + 리텐션 횟수 부여)"></td>
+      <td class="chulgo-check-cell"><input type="checkbox" class="chulgo-nonpartner-check" data-id="${escapeHtml(e.id)}" ${e.nonPartner ? 'checked' : ''} title="비제휴 (대수 인정 제외, 정산서에서 별도 묶음)"></td>
+      <td class="chulgo-check-cell"><input type="checkbox" class="chulgo-retention-check" data-id="${escapeHtml(e.id)}" ${e.retention ? 'checked' : ''} title="리텐션 (정산서 S열 차감 + 리텐션 횟수 부여)"></td>
       <td class="chulgo-check-cell">
         <input type="number" class="chulgo-units-input${e.nonPartner ? ' is-overridden' : ''}" min="0" max="9"
-               data-id="${e.id}" value="${chulgoRecognizedUnits(e)}" ${e.nonPartner ? 'disabled' : ''}
+               data-id="${escapeHtml(e.id)}" value="${chulgoRecognizedUnits(e)}" ${e.nonPartner ? 'disabled' : ''}
                title="이 건이 대수 프로모션에 몇 대로 잡히는지 — 0이면 안 잡힘(예전 '인정댓수' 해제와 같음), 2 이상이면 정산서에 그 수만큼 줄이 생기고 둘째 줄부터 수수료는 비웁니다${e.nonPartner ? ' (비제휴라 자동으로 0대 처리됨)' : ''}">
       </td>
       ${CHULGO_COLS.map((c) => `<td>${chulgoCellHTML(e, c)}</td>`).join('')}
       <td class="chulgo-computed chulgo-blurrable${chulgoAmountsBlurred ? ' chulgo-blurred' : ''}" title="클릭해서 가리기/보이기">${chulgoWon(chulgoComputedFee(e))}</td>
       <td>
         <div class="chulgo-row-actions">
-          <button class="chulgo-edit-btn" data-id="${e.id}" title="출고 기록 수정" aria-label="출고 기록 수정">✎</button>
-          <button class="chulgo-settle-btn${chulgoHasSettleDetail(e) ? ' has-memo' : ''}" data-id="${e.id}" title="정산 상세 (비용 항목 / 페이백 / 메모)">💰</button>
-          <button class="chulgo-memo-btn${e.memo ? ' has-memo' : ''}" data-id="${e.id}" title="메모 (계약기간/주행거리/초기자금)">📝</button>
-          <button class="chulgo-del-btn" data-id="${e.id}" title="삭제">✕</button>
+          <button class="chulgo-edit-btn" data-id="${escapeHtml(e.id)}" title="출고 기록 수정" aria-label="출고 기록 수정">✎</button>
+          <button class="chulgo-settle-btn${chulgoHasSettleDetail(e) ? ' has-memo' : ''}" data-id="${escapeHtml(e.id)}" title="정산 상세 (비용 항목 / 페이백 / 메모)">💰</button>
+          <button class="chulgo-memo-btn${e.memo ? ' has-memo' : ''}" data-id="${escapeHtml(e.id)}" title="메모 (계약기간/주행거리/초기자금)">📝</button>
+          <button class="chulgo-del-btn" data-id="${escapeHtml(e.id)}" title="삭제">✕</button>
         </div>
       </td>
     </tr>
@@ -3852,7 +3908,7 @@ function renderChulgoExcelPreview() {
   const rows = list
     .map(
       (e, i) => `
-    <tr data-id="${e.id}">
+    <tr data-id="${escapeHtml(e.id)}">
       <td class="chulgo-check-cell">${i + 1}</td>
       <td>${escapeHtml(e.dbType || '')}</td>
       <td>${escapeHtml(e.company || '')}</td>
@@ -4526,6 +4582,7 @@ const ORG_DEFAULT_WINDOW_SIZE = { width: 1400, height: 900 };
 
 let orgConstants = null; // { organizations, positionsByType, permissions }
 let myOrgInfo = null;
+let orgInfoRevision = 0;
 let orgMembersCache = [];
 let orgTeamsCache = [];
 let orgSearchQuery = '';
@@ -4569,6 +4626,15 @@ async function orgLoadConstantsOnce() {
 // 사이드바 노출 여부 — superAdmin/orgManager/teamManager만. 시스템 권한이 바뀌면
 // (예: 재광님이 다른 사람을 superAdmin으로 바꿈) 실시간으로 즉시 반영된다.
 function orgApplyMyInfo(info) {
+  orgInfoRevision++;
+  if (myOrgInfo?.organization !== info?.organization || myOrgInfo?.permission !== info?.permission) {
+    financeCredentials = []; financeEditingId = null;
+    orgMembersCache = []; orgTeamsCache = [];
+    financeListWrap.replaceChildren(); orgListWrap.replaceChildren(); orgLedgerWrap.replaceChildren();
+    orgLedgerSummaryEl.textContent = '';
+    document.getElementById('finance-popup').classList.add('hidden');
+    for (const id of ['finance-site-name', 'finance-author-name', 'finance-login-id', 'finance-login-pw']) document.getElementById(id).value = '';
+  }
   myOrgInfo = info;
   financeNavBtn.classList.toggle('hidden', !(info && info.organization));
   const scope = info && ['superAdmin', 'orgManager', 'teamManager'].includes(info.permission) ? info.permission : null;
@@ -4639,11 +4705,14 @@ document.getElementById('org-branch-links-save').addEventListener('click', async
 });
 
 window.api.onOrgMyInfoUpdate(orgApplyMyInfo);
-window.api.getMyOrgInfo().then(orgApplyMyInfo).catch(() => {});
+{ const revision = orgInfoRevision; window.api.getMyOrgInfo().then(info => { if (revision === orgInfoRevision) orgApplyMyInfo(info); }).catch(() => {}); }
 
 async function orgFetchMembers() {
+  const requestUser = currentUser;
+  const revision = orgInfoRevision;
   await orgLoadConstantsOnce();
   const [members, teams] = await Promise.all([window.api.getOrgMembers(), window.api.getOrgTeams()]);
+  if (requestUser !== currentUser || revision !== orgInfoRevision) return;
   orgMembersCache = members;
   orgTeamsCache = teams.sort((a, b) => a.order - b.order);
 }
@@ -4666,7 +4735,7 @@ function orgMemberCardHTML(m) {
       </span>
       <span class="org-member-chevron" aria-hidden="true">›</span>
     </button>
-    <div class="org-member-detail" data-detail-for="${m.uid}">
+    <div class="org-member-detail" data-detail-for="${escapeHtml(m.uid)}">
       이메일: ${escapeHtml(m.email)}<br>
       소속: ${escapeHtml(orgLabelOf(m.organization))} ${team ? '· ' + escapeHtml(team.teamName) : ''}<br>
       권한: ${escapeHtml(orgPermissionLabel(m.permission))}<br>
@@ -4725,9 +4794,9 @@ function renderOrgChart() {
       card.innerHTML = `
         <div class="org-team-card-head">
           <span class="org-team-card-title">${escapeHtml(team.teamName)}</span>
-          ${canEdit ? `<button type="button" class="org-team-edit-btn" data-edit-team="${team.id}" aria-label="${escapeHtml(team.teamName)} 수정">✎</button>` : ''}
+          ${canEdit ? `<button type="button" class="org-team-edit-btn" data-edit-team="${escapeHtml(team.id)}" aria-label="${escapeHtml(team.teamName)} 수정">✎</button>` : ''}
         </div>
-        <div class="org-team-manager${manager ? '' : ' vacant'}" data-vacant-team="${team.id}">
+        <div class="org-team-manager${manager ? '' : ' vacant'}" data-vacant-team="${escapeHtml(team.id)}">
           ${manager ? `<span class="org-lead-role">팀장</span> ${escapeHtml(manager.name)}` : `팀장 공석${canEdit ? ' · 배정하기' : ''}`}
         </div>
         <div class="org-team-members"></div>`;
@@ -4975,7 +5044,10 @@ function orgComputedFeeFor(e, position) {
 // 전부 감싸서, 전역 안전망 토스트("예상치 못한 오류...") 대신 이 패널 안에 이유가
 // 뜨게 한다.
 async function renderOrgLedgerInner(month) {
+  const requestUser = currentUser;
+  const revision = orgInfoRevision;
   const data = await window.api.getOrgLedgerForScope({ month });
+  if (requestUser !== currentUser || revision !== orgInfoRevision || month !== orgCurrentLedgerMonth()) return;
   const { members, entries } = data;
   const teamsById = new Map(orgTeamsCache.map((t) => [t.id, t]));
   const entriesByAuthor = new Map();
@@ -5029,11 +5101,13 @@ async function renderOrgLedgerInner(month) {
 orgLedgerMonthInput.addEventListener('change', renderOrgLedger);
 
 orgHistoryOpenBtn.addEventListener('click', async () => {
+  const requestUser = currentUser;
   const listEl = document.getElementById('org-history-list');
   listEl.innerHTML = '불러오는 중...';
   document.getElementById('org-history-popup').classList.remove('hidden');
   try {
     const items = await window.api.getOrgHistory();
+    if (requestUser !== currentUser) return;
     listEl.innerHTML = items.length ? '' : '기록이 없습니다.';
     items.forEach((h) => {
       const row = document.createElement('div');
@@ -5088,10 +5162,10 @@ function financeMatchesSearch(f) {
 function financePersonBlockHTML(f) {
   const canEdit = myOrgInfo && (myOrgInfo.uid === f.authorUid || myOrgInfo.permission === 'superAdmin');
   return `
-    <div class="finance-person-block" data-id="${f.id}">
+    <div class="finance-person-block" data-id="${escapeHtml(f.id)}">
       <div class="finance-person-name">
         ${escapeHtml(f.authorName || '')}
-        ${canEdit ? `<button type="button" class="finance-edit-icon" data-finance-edit="${f.id}" title="수정">✎</button>` : ''}
+        ${canEdit ? `<button type="button" class="finance-edit-icon" data-finance-edit="${escapeHtml(f.id)}" title="수정">✎</button>` : ''}
       </div>
       <div class="finance-mini-row">
         <span class="finance-mini-label">ID</span>

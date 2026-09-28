@@ -27,14 +27,25 @@ const teamEventMapStore = new Store({ name: 'team-event-map' }); // teamEventId 
 // 한 번 만든 걸 캐시해두고, 실제로 store가 바뀔 때만(mutate 시점에) 무효화한다.
 let teamEventReverseMapCache = null;
 function invalidateTeamEventReverseMap() { teamEventReverseMapCache = null; }
+function teamAccountKey() {
+  const id = googleAuth.getAccountId();
+  return id ? Buffer.from(id).toString('hex') : null;
+}
+function teamMappings(account = teamAccountKey()) {
+  if (!account) return {};
+  return teamEventMapStore.get(`accounts.${account}`, {});
+}
+function migrateLegacyTeamMappings() {
+  const account = teamAccountKey();
+  if (!account || teamEventMapStore.get('legacyOwner')) return;
+  const legacy = Object.fromEntries(Object.entries(teamEventMapStore.store)
+    .filter(([key, value]) => key !== 'accounts' && value && value.googleEventId));
+  // Bind once to the identity present at startup, never to a later login.
+  if (Object.keys(legacy).length) teamEventMapStore.set(`accounts.${account}`, legacy);
+  teamEventMapStore.set('legacyOwner', account);
+}
 function getTeamEventReverseMap() {
-  if (!teamEventReverseMapCache) {
-    teamEventReverseMapCache = new Map();
-    for (const teamEventId of Object.keys(teamEventMapStore.store)) {
-      teamEventReverseMapCache.set(teamEventMapStore.get(teamEventId).googleEventId, teamEventId);
-    }
-  }
-  return teamEventReverseMapCache;
+  return new Map(Object.entries(teamMappings()).map(([id, value]) => [value.googleEventId, id]));
 }
 
 const TEAM_EVENT_COLOR_ID = '11'; // Google Calendar "Tomato" red, to visually flag team-shared events
@@ -93,6 +104,7 @@ const ORG_POSITIONS_BY_TYPE = {
 const ORG_PERMISSIONS = ['superAdmin', 'orgManager', 'teamManager', 'member'];
 let myOrgInfo = null; // 지금 로그인한 계정의 orgMembers 문서(내 소속/팀/직급/권한) — 서버 구독값이라 신뢰 가능
 let unsubscribeOrgMemberSelf = null;
+let orgSubscriptionGeneration = 0;
 
 let mainWindow;
 let tray = null;
@@ -119,6 +131,7 @@ const TEAM_EVENT_RETRY_COOLDOWN_MS = 5 * 60 * 1000; // don't hammer the Calendar
 const teamEventSyncInFlight = new Map(); // teamEventId -> in-progress Promise (prevents duplicate creates)
 
 let unsubscribeChulgo = null;
+let chulgoGeneration = 0;
 let unsubscribeReminders = null;
 
 const APP_ICON_PATH = path.join(__dirname, 'build', 'icon.png');
@@ -268,11 +281,15 @@ function createTray() {
 // 없어서 일정 주기로 직접 물어봐서 새로고침한다 — 앱을 켜두는 동안만 돌면 되니 1분이면 충분하다.
 const MEMOS_POLL_INTERVAL_MS = 60 * 1000;
 let memosPollTimer = null;
+let memosGeneration = 0;
 
 async function refreshMemosFromGoogleTasks() {
   if (!googleAuth.isSignedIn()) return;
   try {
+    const generation = memosGeneration;
+    const session = googleAuth.getSessionGeneration();
     const memos = await googleAuth.listTasks(config.google);
+    if (generation !== memosGeneration || session !== googleAuth.getSessionGeneration() || !googleAuth.isSignedIn()) return;
     handleMemosUpdate(memos);
   } catch (err) {
     console.error('할 일 목록 불러오기 실패:', err);
@@ -287,6 +304,7 @@ function startMemosSubscription() {
 }
 
 function stopMemosSubscription() {
+  memosGeneration += 1;
   if (memosPollTimer) {
     clearInterval(memosPollTimer);
     memosPollTimer = null;
@@ -453,10 +471,12 @@ function startOrgMemberSelfSubscription(uid) {
     console.error('조직 구성원 등록 실패:', err);
   });
   if (unsubscribeOrgMemberSelf) return;
+  const generation = ++orgSubscriptionGeneration;
   unsubscribeOrgMemberSelf = firebaseClient.subscribeToOrgMemberSelf(
     firebaseHandle.db,
     uid,
     (info) => {
+      if (generation !== orgSubscriptionGeneration) return;
       myOrgInfo = info;
       syncFinanceCredentialsSubscription();
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('org:my-info-update', info);
@@ -466,11 +486,13 @@ function startOrgMemberSelfSubscription(uid) {
 }
 
 function stopOrgMemberSelfSubscription() {
+  orgSubscriptionGeneration += 1;
   if (unsubscribeOrgMemberSelf) {
     unsubscribeOrgMemberSelf();
     unsubscribeOrgMemberSelf = null;
   }
   myOrgInfo = null;
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('org:my-info-update', null);
   stopFinanceCredentialsSubscription();
 }
 
@@ -479,6 +501,7 @@ function stopOrgMemberSelfSubscription() {
 // 것도 다시 안 한다(불필요한 재구독 방지). ---
 let unsubscribeFinanceCredentials = null;
 let financeCredentialsOrg = null;
+let financeGeneration = 0;
 
 function syncFinanceCredentialsSubscription() {
   const org = myOrgInfo && myOrgInfo.organization;
@@ -487,6 +510,8 @@ function syncFinanceCredentialsSubscription() {
     unsubscribeFinanceCredentials();
     unsubscribeFinanceCredentials = null;
   }
+  const generation = ++financeGeneration;
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('finance:update', []);
   financeCredentialsOrg = org || null;
   if (!org) {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('finance:update', []);
@@ -496,6 +521,7 @@ function syncFinanceCredentialsSubscription() {
     firebaseHandle.db,
     org,
     (items) => {
+      if (generation !== financeGeneration) return;
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('finance:update', items);
     },
     (err) => console.error('계정 메모 subscribe error:', err)
@@ -503,6 +529,8 @@ function syncFinanceCredentialsSubscription() {
 }
 
 function stopFinanceCredentialsSubscription() {
+  financeGeneration += 1;
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('finance:update', []);
   if (unsubscribeFinanceCredentials) {
     unsubscribeFinanceCredentials();
     unsubscribeFinanceCredentials = null;
@@ -574,119 +602,94 @@ function teamEventSignature(ev) {
   return JSON.stringify({ title: ev.title, start: ev.start, end: ev.end, allDay: ev.allDay });
 }
 
-async function syncTeamEventToCalendar(ev, { notify }) {
-  // The Firestore listener and a direct post-write call (from the IPC handler that just
-  // made the change) can both land here for the same event almost simultaneously. Without
-  // serializing per-id, both would see "no mapping yet" and each create a duplicate Google
-  // Calendar event. Piggyback on any in-flight sync for the same id instead of racing it.
-  if (teamEventSyncInFlight.has(ev.id)) {
-    return teamEventSyncInFlight.get(ev.id);
-  }
-
-  const syncPromise = (async () => {
-    const lastFailedAt = teamEventSyncFailures.get(ev.id);
-    if (lastFailedAt && Date.now() - lastFailedAt < TEAM_EVENT_RETRY_COOLDOWN_MS) {
-      return; // recently failed (e.g. API error) — don't hammer the Calendar API every snapshot
-    }
-
-    const mapping = teamEventMapStore.get(ev.id);
-    const signature = teamEventSignature(ev);
-
-    try {
-      if (!mapping) {
-        const created = await googleAuth.createEvent(config.google, {
-          summary: `👥 ${ev.title}`,
-          start: ev.start,
-          end: ev.end,
-          colorId: TEAM_EVENT_COLOR_ID,
-        });
-        teamEventMapStore.set(ev.id, { googleEventId: created.id, signature });
-        invalidateTeamEventReverseMap();
-        if (notify) {
-          new Notification({ title: '📅 팀 일정 추가', body: `${ev.title} (${ev.createdByName || '관리자'})` }).show();
+let teamSyncGeneration = 0;
+let teamSnapshotRevision = 0;
+const teamEventSyncLatest = new Map();
+function teamSyncContext() {
+  return { account: teamAccountKey(), session: googleAuth.getSessionGeneration(), generation: teamSyncGeneration };
+}
+function isTeamSyncCurrent(ctx) {
+  return googleAuth.isSignedIn() && ctx.account && ctx.account === teamAccountKey()
+    && ctx.session === googleAuth.getSessionGeneration() && ctx.generation === teamSyncGeneration;
+}
+function setTeamMapping(ctx, id, value) {
+  if (!isTeamSyncCurrent(ctx)) return;
+  const map = teamMappings(ctx.account);
+  if (value) map[id] = value; else delete map[id];
+  teamEventMapStore.set(`accounts.${ctx.account}`, map);
+  invalidateTeamEventReverseMap();
+}
+async function queueTeamSync(id, event, notify = false, ctx = teamSyncContext()) {
+  if (!isTeamSyncCurrent(ctx)) return;
+  const key = `${ctx.account}:${ctx.session}:${ctx.generation}:${id}`;
+  teamEventSyncLatest.set(key, { event, notify });
+  if (teamEventSyncInFlight.has(key)) return teamEventSyncInFlight.get(key);
+  const promise = (async () => {
+    // Queue latest revision instead of losing changes that arrive during an API call.
+    while (teamEventSyncLatest.has(key) && isTeamSyncCurrent(ctx)) {
+      const next = teamEventSyncLatest.get(key);
+      teamEventSyncLatest.delete(key);
+      const mapping = teamMappings(ctx.account)[id];
+      try {
+        if (!next.event) {
+          if (!mapping) continue;
+          setTeamMapping(ctx, id, { ...mapping, pendingDelete: true });
+          try { await googleAuth.deleteEvent(config.google, { eventId: mapping.googleEventId }); }
+          catch (err) { if (![404, 410].includes(Number(err.code || err.response?.status))) throw err; }
+          setTeamMapping(ctx, id, null);
+        } else {
+          const ev = next.event;
+          const signature = teamEventSignature(ev);
+          if (mapping && mapping.signature === signature && !mapping.pendingDelete) continue;
+          const payload = { summary: `👥 ${ev.title}`, start: ev.start, end: ev.end, colorId: TEAM_EVENT_COLOR_ID };
+          const result = mapping
+            ? await googleAuth.updateEvent(config.google, { ...payload, eventId: mapping.googleEventId })
+            : await googleAuth.createEvent(config.google, { ...payload, operationId: `team:${ctx.account}:${id}` });
+          setTeamMapping(ctx, id, { googleEventId: mapping ? mapping.googleEventId : result.id, signature });
+          if (next.notify && !mapping && isTeamSyncCurrent(ctx)) {
+            new Notification({ title: '📅 팀 일정 추가', body: `${ev.title} (${ev.createdByName || '관리자'})` }).show();
+          }
         }
-      } else if (mapping.signature !== signature) {
-        await googleAuth.updateEvent(config.google, {
-          eventId: mapping.googleEventId,
-          summary: `👥 ${ev.title}`,
-          start: ev.start,
-          end: ev.end,
-          colorId: TEAM_EVENT_COLOR_ID,
-        });
-        teamEventMapStore.set(ev.id, { googleEventId: mapping.googleEventId, signature });
-        invalidateTeamEventReverseMap();
+      } catch (err) {
+        // Leave the mapping/pending deletion intact. A later snapshot/start retries it.
+        if (!teamEventSyncLatest.has(key)) throw err;
       }
-      teamEventSyncFailures.delete(ev.id);
-    } catch (err) {
-      teamEventSyncFailures.set(ev.id, Date.now());
-      throw err;
     }
   })();
-
-  teamEventSyncInFlight.set(ev.id, syncPromise);
-  try {
-    return await syncPromise;
-  } finally {
-    teamEventSyncInFlight.delete(ev.id);
-  }
+  teamEventSyncInFlight.set(key, promise);
+  try { return await promise; }
+  finally { teamEventSyncInFlight.delete(key); teamEventSyncLatest.delete(key); }
 }
-
+async function syncTeamEventToCalendar(ev, { notify }) {
+  return queueTeamSync(ev.id, ev, notify);
+}
 async function handleTeamEventsUpdate(events) {
-  const previousIds = new Set(teamEventsCache.map((e) => e.id));
-  const newIds = new Set(events.map((e) => e.id));
+  const ctx = teamSyncContext();
+  const revision = ++teamSnapshotRevision;
+  const previousIds = teamEventsCache.map(event => event.id);
   const notify = !isFirstTeamEventsSnapshot;
   teamEventsCache = events;
   isFirstTeamEventsSnapshot = false;
-
-  if (!googleAuth.isSignedIn()) return; // will reconcile once the user signs in
-
-  for (const prevId of previousIds) {
-    if (newIds.has(prevId)) continue;
-    const mapping = teamEventMapStore.get(prevId);
-    if (mapping) {
-      // 실시간 구독이 "최근 기간"만 보기 때문에, 사라졌다고 해서 곧 삭제는 아니다 —
-      // 날짜를 기간 밖으로 옮겨도 똑같이 사라져 보인다. 진짜 지워진 게 맞는지
-      // 확인하고 나서만 각자 구글 캘린더에서 지운다(멀쩡한 일정 삭제 방지).
-      let reallyDeleted = true;
-      try {
-        reallyDeleted = !(await firebaseClient.teamEventExists(firebaseHandle.db, prevId));
-      } catch (err) {
-        // 확인 자체가 실패하면(네트워크 등) 지우지 않고 넘어간다 — 잘못 지우는 것보다
-        // 남겨두는 쪽이 안전하고, 다음 기회에 다시 정리된다.
-        console.error('팀 일정 삭제 여부 확인 실패:', err);
-        reallyDeleted = false;
-      }
-      if (!reallyDeleted) continue;
-
-      try {
-        await googleAuth.deleteEvent(config.google, { eventId: mapping.googleEventId });
-      } catch (err) {
-        console.error('팀 일정 삭제 동기화 실패:', err);
-      }
-      teamEventMapStore.delete(prevId);
-      invalidateTeamEventReverseMap();
-    }
-    teamEventSyncFailures.delete(prevId);
-  }
-
-  for (const ev of events) {
+  if (!isTeamSyncCurrent(ctx)) return;
+  const newIds = new Set(events.map(e => e.id));
+  for (const id of new Set([...previousIds, ...Object.keys(teamMappings(ctx.account))])) {
+    if (!isTeamSyncCurrent(ctx)) return;
+    if (newIds.has(id)) continue;
     try {
-      await syncTeamEventToCalendar(ev, { notify });
-    } catch (err) {
-      console.error('팀 일정 동기화 실패:', err);
-    }
+      // The subscription is date-filtered; absence alone never authorizes deletion.
+      const exists = await firebaseClient.teamEventExists(firebaseHandle.db, id);
+      if (!isTeamSyncCurrent(ctx) || revision !== teamSnapshotRevision) return;
+      if (!exists) await queueTeamSync(id, null, false, ctx);
+    } catch (err) { console.error('팀 일정 삭제 동기화 실패:', err); }
+  }
+  for (const ev of events) {
+    if (!isTeamSyncCurrent(ctx) || revision !== teamSnapshotRevision) return;
+    try { await queueTeamSync(ev.id, ev, notify, ctx); }
+    catch (err) { console.error('팀 일정 동기화 실패:', err); }
   }
 }
-
 async function reconcileTeamEventsForCurrentUser() {
-  if (!googleAuth.isSignedIn()) return;
-  for (const ev of teamEventsCache) {
-    try {
-      await syncTeamEventToCalendar(ev, { notify: false });
-    } catch (err) {
-      console.error('팀 일정 재동기화 실패:', err);
-    }
-  }
+  return handleTeamEventsUpdate(teamEventsCache);
 }
 
 function runTeamEventStartDateBackfill() {
@@ -726,14 +729,17 @@ function stopTeamEventStartDateBackfill() {
 function startTeamEventsSubscription() {
   if (unsubscribeTeamEvents) return;
   isFirstTeamEventsSnapshot = true;
+  const generation = teamSyncGeneration;
   unsubscribeTeamEvents = firebaseClient.subscribeToTeamEvents(
     firebaseHandle.db,
-    handleTeamEventsUpdate,
+    (events) => { if (generation === teamSyncGeneration) handleTeamEventsUpdate(events).catch(console.error); },
     (err) => console.error('team events subscribe error:', err)
   );
 }
 
 function stopTeamEventsSubscription() {
+  teamSyncGeneration += 1;
+  teamEventSyncLatest.clear();
   if (unsubscribeTeamEvents) {
     unsubscribeTeamEvents();
     unsubscribeTeamEvents = null;
@@ -748,10 +754,12 @@ function startChulgoSubscription() {
   if (unsubscribeChulgo) return;
   const uid = firebaseHandle.auth.currentUser && firebaseHandle.auth.currentUser.uid;
   if (!uid) return;
+  const generation = ++chulgoGeneration;
   unsubscribeChulgo = firebaseClient.subscribeToChulgoEntries(
     firebaseHandle.db,
     uid,
     (entries) => {
+      if (generation !== chulgoGeneration) return;
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('chulgo:update', entries);
     },
     (err) => console.error('출고 장부 subscribe error:', err)
@@ -759,6 +767,7 @@ function startChulgoSubscription() {
 }
 
 function stopChulgoSubscription() {
+  chulgoGeneration += 1;
   if (unsubscribeChulgo) {
     unsubscribeChulgo();
     unsubscribeChulgo = null;
@@ -778,13 +787,32 @@ function sleep(ms) {
 // user looking "signed in" (their Google Calendar token was still cached locally) while
 // Firestore silently never connected — every subscription's data (개인 메모, the
 // 출고 장부, etc.) stayed empty with no visible error. Retrying here closes that window.
+let firebaseAuthTransition = Promise.resolve();
+let firebaseSigningSession = null;
+function signInFirebaseForSession(idToken, session) {
+  const operation = firebaseAuthTransition.catch(() => {}).then(async () => {
+    if (!firebaseHandle || session !== googleAuth.getSessionGeneration() || !googleAuth.isSignedIn()) return;
+    firebaseSigningSession = session;
+    try { await firebaseClient.signInWithGoogleIdToken(firebaseHandle.auth, idToken); }
+    finally { firebaseSigningSession = null; }
+    if (session !== googleAuth.getSessionGeneration() || !googleAuth.isSignedIn()) {
+      await firebaseClient.signOutFirebase(firebaseHandle.auth);
+    }
+  });
+  firebaseAuthTransition = operation;
+  return operation;
+}
 async function trySignInFirebaseFromStoredGoogleSession() {
   if (!firebaseHandle || !googleAuth.isSignedIn()) return;
+  const session = googleAuth.getSessionGeneration();
   const attempts = 4;
   for (let i = 0; i < attempts; i += 1) {
     try {
+      if (session !== googleAuth.getSessionGeneration() || !googleAuth.isSignedIn()) return;
       const idToken = await googleAuth.getFreshIdToken(config.google);
-      await firebaseClient.signInWithGoogleIdToken(firebaseHandle.auth, idToken);
+      if (session !== googleAuth.getSessionGeneration() || !googleAuth.isSignedIn()) return;
+      await signInFirebaseForSession(idToken, session);
+      if (session !== googleAuth.getSessionGeneration() && !googleAuth.isSignedIn()) await firebaseClient.signOutFirebase(firebaseHandle.auth);
       return;
     } catch (err) {
       console.error(`저장된 구글 세션으로 재로그인 실패 (시도 ${i + 1}/${attempts}):`, err);
@@ -799,6 +827,11 @@ async function trySignInFirebaseFromStoredGoogleSession() {
 // once, regardless of timing.
 function setupAuthStateListener() {
   firebaseClient.onAuthStateChangedListener(firebaseHandle.auth, (user) => {
+    if (user && firebaseSigningSession !== null && firebaseSigningSession !== googleAuth.getSessionGeneration()) return;
+    if (user && !googleAuth.isSignedIn()) {
+      firebaseClient.signOutFirebase(firebaseHandle.auth).catch(console.error);
+      return;
+    }
     if (user) {
       startTeamEventStartDateBackfill();
       startMemosSubscription();
@@ -840,6 +873,11 @@ function currentUserPayload() {
 // 설명하는 내용을 그대로 여기 한 줄씩 남겨둔다. 버전 하나하나 다 안 적어도 되고,
 // 사용자에게 보여줄 만한 버전에만 적어두면 그 사이 버전은 자동으로 같이 묶여 보인다.
 const CHANGELOG = {
+  '0.39.10': [
+    '저장 대기 중 입력창을 닫고 초안을 다시 열 수 있게 개선했습니다',
+    '계정별 팀 일정 동기화와 변경·삭제 재시도, 중복 일정 방지를 보완했습니다',
+    '로그인·로그아웃과 공유 계정 정보 보호, AI 반복 실행·한글 입력을 개선했습니다',
+  ],
   '0.30.2': ['장부의 "공제후총수수료" 계산에서 페이백이 반영되지 않던 버그 수정 (페이백을 넣어도 합계가 그대로였던 문제)'],
   '0.30.5': ['장부 수수료 계산에 빠져있던 추가수수료 항목 반영'],
   '0.31.0': ['🆕 금융사 비교시트 추가 — 금융사별 월납입금/잔존가치로 총인수비용을 자동 계산하고, 저렴한 순위를 보여줍니다'],
@@ -1158,6 +1196,7 @@ app.whenReady().then(() => {
 
   if (!isPlaceholder) {
     firebaseHandle = firebaseClient.initFirebase(config.firebase);
+    migrateLegacyTeamMappings();
     setupAuthStateListener();
 
     // 0.29.0 에서 할 일(Tasks) 권한이 새로 추가됐다 — 그 전에 로그인해둔 사람은 저장된
@@ -1261,13 +1300,27 @@ ipcMain.handle('calendar:get-holidays', (_e, year) => koreanHolidays.getHolidays
 ipcMain.handle('google:is-signed-in', () => googleAuth.isSignedIn());
 ipcMain.handle('google:sign-in', async () => {
   const { idToken } = await googleAuth.signIn(config.google);
+  const session = googleAuth.getSessionGeneration();
+  stopMemosSubscription();
+  stopTeamEventsSubscription();
+  stopOrgMemberSelfSubscription();
+  stopChulgoSubscription();
+  stopReminderSubscription();
   // Subscriptions start from setupAuthStateListener once this actually lands, not from here.
-  if (firebaseHandle) await firebaseClient.signInWithGoogleIdToken(firebaseHandle.auth, idToken);
+  if (firebaseHandle) await signInFirebaseForSession(idToken, session);
+  if (session !== googleAuth.getSessionGeneration() || !googleAuth.isSignedIn()) {
+    if (firebaseHandle && !googleAuth.isSignedIn()) await firebaseClient.signOutFirebase(firebaseHandle.auth);
+    return currentUserPayload();
+  }
   refreshMemosFromGoogleTasks(); // 방금 부여받은 권한으로 바로 한 번 당겨온다(다음 폴링까지 안 기다림)
   return currentUserPayload();
 });
 ipcMain.handle('google:sign-out', async () => {
   googleAuth.signOut();
+  stopMemosSubscription();
+  stopTeamEventsSubscription();
+  stopOrgMemberSelfSubscription();
+  stopChulgoSubscription();
   // Subscriptions stop from setupAuthStateListener once this actually lands, not from here.
   if (firebaseHandle) await firebaseClient.signOutFirebase(firebaseHandle.auth);
 });
@@ -1373,12 +1426,13 @@ ipcMain.handle('memos:delete', async (_e, id) => {
 ipcMain.handle('team-events:create', async (_e, payload) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireAdmin();
+  const ctx = teamSyncContext();
   const user = firebaseHandle.auth.currentUser;
   const createdByName = user.displayName || user.email || '관리자';
   const id = await firebaseClient.createTeamEvent(firebaseHandle.db, { ...payload, createdByName });
-  if (googleAuth.isSignedIn()) {
+  if (isTeamSyncCurrent(ctx)) {
     try {
-      await syncTeamEventToCalendar({ id, ...payload, createdByName }, { notify: false });
+      await queueTeamSync(id, { id, ...payload, createdByName }, false, ctx);
     } catch (err) {
       console.error('팀 일정 즉시 동기화 실패:', err);
     }
@@ -1388,10 +1442,11 @@ ipcMain.handle('team-events:create', async (_e, payload) => {
 ipcMain.handle('team-events:update', async (_e, { id, ...data }) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireAdmin();
+  const ctx = teamSyncContext();
   await firebaseClient.updateTeamEvent(firebaseHandle.db, id, data);
-  if (googleAuth.isSignedIn()) {
+  if (isTeamSyncCurrent(ctx)) {
     try {
-      await syncTeamEventToCalendar({ id, ...data }, { notify: false });
+      await queueTeamSync(id, { id, ...data }, false, ctx);
     } catch (err) {
       console.error('팀 일정 즉시 동기화 실패:', err);
     }
@@ -1401,20 +1456,9 @@ ipcMain.handle('team-events:update', async (_e, { id, ...data }) => {
 ipcMain.handle('team-events:delete', async (_e, id) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireAdmin();
+  const ctx = teamSyncContext();
   await firebaseClient.deleteTeamEvent(firebaseHandle.db, id);
-  const mapping = teamEventMapStore.get(id);
-  if (mapping) {
-    if (googleAuth.isSignedIn()) {
-      try {
-        await googleAuth.deleteEvent(config.google, { eventId: mapping.googleEventId });
-      } catch (err) {
-        console.error('팀 일정 즉시 삭제 동기화 실패:', err);
-      }
-    }
-    teamEventMapStore.delete(id);
-    invalidateTeamEventReverseMap();
-  }
-  teamEventSyncFailures.delete(id);
+  await queueTeamSync(id, null, false, ctx).catch((err) => console.error('팀 일정 즉시 삭제 동기화 실패:', err));
 });
 
 // --- 출고 관리 장부 (personal — only ever visible/writable by its own author) ---
@@ -1592,6 +1636,11 @@ ipcMain.handle('org:get-branch-links', async () => {
 ipcMain.handle('org:set-branch-links', async (_e, links) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
   requireSuperAdmin();
+  for (const url of Object.values(links || {})) {
+    if (!url) continue;
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error('INVALID_BRANCH_URL');
+  }
   await firebaseClient.setBranchLinks(firebaseHandle.db, links);
   await firebaseClient.addOrgHistory(firebaseHandle.db, {
     type: 'branch_links_update', byUid: firebaseHandle.auth.currentUser.uid,
@@ -2223,6 +2272,8 @@ async function resolveBrowserExePath(browserKey) {
 }
 
 async function openExternalWithPreferredBrowser(url) {
+  const parsed = new URL(url);
+  if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error('INVALID_URL');
   const pref = settingsStore.get(PREFERRED_BROWSER_KEY) || 'system';
   if (pref === 'system') { await shell.openExternal(url); return; }
   const exePath = await resolveBrowserExePath(pref);

@@ -1,4 +1,5 @@
 const http = require('http');
+const crypto = require('crypto');
 // 캘린더 API 딱 하나만 쓰는데 예전 googleapis 패키지는 구글의 모든 API(Gmail/드라이브/
 // 시트 등)를 다 묶어서 115MB 였다. 캘린더만 딱 떼어낸 공식 경량 패키지로 바꿔서
 // 설치파일이 그만큼 가벼워진다 — 실제 API 응답이 완전히 동일함을 확인하고 교체했다.
@@ -9,6 +10,23 @@ const { shell } = require('electron');
 const Store = require('electron-store');
 
 const store = new Store({ name: 'google-tokens' });
+let sessionGeneration = 0;
+let activeLogin = null;
+const eventCreates = new Map();
+function getSessionGeneration() { return sessionGeneration; }
+function getAccountId() {
+  const tokens = store.get('tokens');
+  if (!tokens) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64url').toString());
+    if (claims.sub) return String(claims.sub);
+  } catch (_) {}
+  // Legacy sessions without an ID token remain isolated without exposing token bytes.
+  return tokens.refresh_token ? crypto.createHash('sha256').update(tokens.refresh_token).digest('hex') : null;
+}
+function requireSession(generation) {
+  if (generation !== sessionGeneration) throw new Error('SESSION_CHANGED');
+}
 
 // calendar.events grants read+write on events (not full calendar admin); tasks grants
 // read+write on Google Tasks(할 일) — 왼쪽 메모장이 이제 이걸로 동작해서, 폰 Gmail/캘린더
@@ -21,6 +39,7 @@ const SCOPES = [
 ];
 
 function createOAuthClient(googleConfig) {
+  const generation = sessionGeneration;
   const client = new OAuth2Client(
     googleConfig.clientId,
     googleConfig.clientSecret,
@@ -30,6 +49,7 @@ function createOAuthClient(googleConfig) {
   // Google refreshes id_token/access_token transparently on API calls;
   // persist whatever comes back so future launches stay signed in.
   client.on('tokens', (tokens) => {
+    if (generation !== sessionGeneration) return;
     const existing = store.get('tokens') || {};
     store.set('tokens', { ...existing, ...tokens });
   });
@@ -55,13 +75,22 @@ function hasTasksScope() {
 // 로그인 창을 그냥 닫아버리거나 리다이렉트가 영영 안 오면(네트워크 문제 등) 이 Promise가
 // 끝까지 안 풀려서 서버가 포트를 계속 붙잡고 있었다 — close()를 호출부에서 부를 수 있게
 // 밖으로 내보낸다.
-function waitForAuthCode(port) {
+function waitForAuthCode(port, state) {
   let server;
+  let cancel;
   const promise = new Promise((resolve, reject) => {
+    cancel = () => reject(new Error('LOGIN_CANCELLED'));
     server = http.createServer((req, res) => {
       const url = new URL(req.url, `http://localhost:${port}`);
       const code = url.searchParams.get('code');
       const error = url.searchParams.get('error');
+
+      if (req.method !== 'GET' || url.pathname !== '/oauth2callback'
+          || url.searchParams.getAll('state').length !== 1 || url.searchParams.get('state') !== state
+          || (!code && !error) || (code && error)
+          || url.searchParams.getAll('code').length > 1 || url.searchParams.getAll('error').length > 1) {
+        res.writeHead(400); res.end('Invalid login callback'); return;
+      }
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       if (error) {
@@ -79,9 +108,10 @@ function waitForAuthCode(port) {
     // listen()이 실패하면(포트 충돌 등) 리스너 없는 EventEmitter 'error'는 uncaught
     // exception이 되어 메인 프로세스 전체가 죽는다 — 반드시 여기서 받아서 reject로 돌린다.
     server.on('error', reject);
-    server.listen(port);
+    server.listen(port, '127.0.0.1');
   });
-  return { promise, close: () => server.close() };
+  promise.catch(() => {}); // Port errors/cancellation can precede browser launch completion.
+  return { promise, close: () => { cancel(); if (server.listening) server.close(); } };
 }
 
 // 로그인은 사람이 브라우저에서 계정 선택/2단계 인증 등을 거치는 과정이라 API 호출용
@@ -89,37 +119,52 @@ function waitForAuthCode(port) {
 const LOGIN_WAIT_TIMEOUT_MS = 5 * 60 * 1000;
 
 async function signIn(googleConfig) {
+  if (activeLogin) throw new Error('LOGIN_IN_PROGRESS');
+  const generation = ++sessionGeneration;
+  const state = crypto.randomBytes(32).toString('base64url');
+  const verifier = crypto.randomBytes(48).toString('base64url');
   const client = createOAuthClient(googleConfig);
   const authUrl = client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope: SCOPES,
+    state,
+    code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url'),
+    code_challenge_method: 'S256',
   });
 
-  const { promise: codePromise, close: closeAuthServer } = waitForAuthCode(googleConfig.redirectPort);
+  const { promise: codePromise, close: closeAuthServer } = waitForAuthCode(googleConfig.redirectPort, state);
+  activeLogin = closeAuthServer;
   let code;
   try {
     await shell.openExternal(authUrl);
     code = await withTimeout(codePromise, '구글 로그인', LOGIN_WAIT_TIMEOUT_MS);
+    requireSession(generation);
+    const { tokens } = await withTimeout(client.getToken({ code, codeVerifier: verifier }), '구글 로그인 완료');
+    requireSession(generation);
+    client.setCredentials(tokens);
+    store.set('tokens', tokens);
+    return { idToken: tokens.id_token };
   } catch (err) {
     closeAuthServer();
     throw err;
+  } finally {
+    if (activeLogin === closeAuthServer) activeLogin = null;
   }
-
-  const { tokens } = await client.getToken(code);
-  client.setCredentials(tokens);
-  store.set('tokens', tokens);
-  return { idToken: tokens.id_token };
 }
 
 function signOut() {
+  sessionGeneration++;
+  if (activeLogin) { activeLogin(); activeLogin = null; }
   store.delete('tokens');
 }
 
 async function getFreshIdToken(googleConfig) {
+  const generation = sessionGeneration;
   if (!isSignedIn()) throw new Error('NOT_SIGNED_IN');
   const client = createOAuthClient(googleConfig);
   await withTimeout(client.getAccessToken(), '로그인 갱신'); // refreshes + persists a new id_token if the old one expired
+  requireSession(generation);
   const tokens = store.get('tokens');
   return tokens.id_token;
 }
@@ -177,13 +222,38 @@ async function getUpcomingEvents(googleConfig, { timeMin, timeMax }) {
   return (res.data.items || []).map(mapEvent);
 }
 
-async function createEvent(googleConfig, { summary, start, end, colorId }) {
+async function createEvent(googleConfig, { summary, start, end, colorId, operationId }) {
+  const generation = sessionGeneration;
+  const account = getAccountId();
+  if (!account) throw new Error('NOT_SIGNED_IN');
   const calendar = getCalendarClient(googleConfig);
-  const res = await withTimeout(calendar.events.insert({
-    calendarId: 'primary',
-    requestBody: { summary, start, end, ...(colorId ? { colorId } : {}) },
-  }, GOOGLE_REQ_OPTS), '일정 추가');
-  return mapEvent(res.data);
+  const body = { summary, start, end, ...(colorId ? { colorId } : {}) };
+  const key = crypto.createHash('sha256').update(JSON.stringify([account, operationId || body])).digest('hex');
+  if (!eventCreates.has(key)) {
+    const saved = store.get('pendingEventCreates') || {};
+    const id = saved[key] || (operationId ? key : crypto.randomBytes(20).toString('hex'));
+    store.set('pendingEventCreates', { ...saved, [key]: id });
+    const operation = (async () => {
+      try {
+        let res;
+        try { res = await calendar.events.insert({ calendarId: 'primary', requestBody: { ...body, id } }, GOOGLE_REQ_OPTS); }
+        catch (err) {
+          if (Number(err.code || err.response?.status) !== 409) throw err;
+          res = await calendar.events.get({ calendarId: 'primary', eventId: id }, GOOGLE_REQ_OPTS);
+          if (operationId) {
+            requireSession(generation);
+            res = await calendar.events.patch({ calendarId: 'primary', eventId: id,
+              requestBody: { ...body, colorId: colorId || null } }, GOOGLE_REQ_OPTS);
+          }
+        }
+        requireSession(generation);
+        const pending = store.get('pendingEventCreates') || {}; delete pending[key]; store.set('pendingEventCreates', pending);
+        return mapEvent(res.data);
+      } finally { eventCreates.delete(key); }
+    })();
+    eventCreates.set(key, operation);
+  }
+  return withTimeout(eventCreates.get(key), '일정 추가 (시간초과 시 같은 내용으로 다시 확인)');
 }
 
 async function updateEvent(googleConfig, { eventId, summary, start, end, colorId }) {
@@ -290,6 +360,8 @@ async function deleteTask(googleConfig, { id }) {
 }
 
 module.exports = {
+  getSessionGeneration,
+  getAccountId,
   isSignedIn,
   hasTasksScope,
   signIn,
