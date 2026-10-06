@@ -1295,7 +1295,9 @@ async function aiChatSendMessage() {
     console.error('AI 대화 실패:', err);
     thinkingBubble.className = 'ai-chat-msg error';
     thinkingBubble.textContent = (err.message || '').includes('OPENAI_NOT_CONFIGURED')
-      ? 'OpenAI API 키가 아직 설정되지 않았습니다. config/config.json의 openai.apiKey를 채워주세요.'
+      ? '이 PC에 AI 연결 키가 설정되지 않았습니다. 관리자에게 AI 연결 설정을 요청해 주세요.'
+      : (err.message || '').includes('OPENAI_PRIVATE_CONFIG_UNREADABLE')
+        ? '이 PC의 AI 연결 설정 파일을 읽지 못했습니다. 관리자에게 설정 파일 확인을 요청해 주세요.'
       : `오류: ${err.message || '알 수 없는 오류'}`;
   } finally {
     if (!isCurrent()) return;
@@ -3427,7 +3429,9 @@ document.getElementById('chulgo-ai-fill-analyze').addEventListener('click', asyn
     if (request !== chulgoAiRequest) return;
     console.error('AI 분석 실패:', err);
     chulgoAiFillStatus.textContent = (err.message || '').includes('OPENAI_NOT_CONFIGURED')
-      ? 'OpenAI API 키가 아직 설정되지 않았습니다. config/config.json의 openai.apiKey를 채워주세요.'
+      ? '이 PC에 AI 연결 키가 설정되지 않았습니다. 관리자에게 AI 연결 설정을 요청해 주세요.'
+      : (err.message || '').includes('OPENAI_PRIVATE_CONFIG_UNREADABLE')
+        ? '이 PC의 AI 연결 설정 파일을 읽지 못했습니다. 관리자에게 설정 파일 확인을 요청해 주세요.'
       : `분석 실패: ${err.message || '알 수 없는 오류'}`;
   } finally {
     if (request === chulgoAiRequest) analyzeButton.disabled = false;
@@ -5306,6 +5310,7 @@ const COMPARE_SHEET_COUNT = 2;
 const COMPARE_COMPANIES_KEY = 'compare_companies_v1';
 const COMPARE_SHEETS_KEY = 'compare_sheets_v1';
 const COMPARE_HIDDEN_SHEET_KEY = 'compare_hidden_sheet_v1';
+const COMPARE_INFO_COLLAPSED_KEY = 'compare_info_collapsed_v1';
 const COMPARE_WINDOW_SIZE_KEY = 'compare_window_size_v1';
 const COMPARE_DEFAULT_WINDOW_SIZE = { width: 1728, height: 900 };
 
@@ -5374,6 +5379,7 @@ const compareSaveSheetsDebounced = debounce(compareSaveSheets, 300);
 
 // Visibility is a local preference, separate from both sheets' financial data.
 let compareHiddenSheet = compareLoadJSON(COMPARE_HIDDEN_SHEET_KEY);
+const compareInfoCollapsed = compareLoadJSON(COMPARE_INFO_COLLAPSED_KEY) || {};
 if (compareHiddenSheet !== 0 && compareHiddenSheet !== 1) compareHiddenSheet = null;
 function compareApplyVisibility() {
   comparePanel.querySelector('.compare-sheets-row').dataset.singleSheet = String(compareHiddenSheet !== null);
@@ -5511,9 +5517,12 @@ function compareRenderSheet(idx) {
   el.innerHTML = `
     <div class="compare-sheet-heading">
       <div class="compare-sheet-label"><span class="compare-sheet-number" aria-hidden="true">0${idx + 1}</span><div><span class="workspace-eyebrow">COMPARISON</span><h4>${idx + 1}번 시트</h4></div></div>
-      <button type="button" class="compare-reset-btn" title="월 납입금·잔존가치 초기화">↺ 초기화</button>
+      <div class="compare-sheet-actions">
+        <button type="button" class="compare-info-toggle compare-visibility-btn" aria-expanded="${!compareInfoCollapsed[idx]}" aria-controls="compare-info-${idx}">차량 정보 ${compareInfoCollapsed[idx] ? '펼치기' : '접기'}</button>
+        <button type="button" class="compare-reset-btn" title="월 납입금·잔존가치 초기화">↺ 초기화</button>
+      </div>
     </div>
-    <div class="compare-sheet-top">
+    <div class="compare-sheet-top" id="compare-info-${idx}" ${compareInfoCollapsed[idx] ? 'hidden' : ''}>
       <div class="compare-info-row">${infoFieldsHTML}</div>
     </div>
     <div class="compare-months-bar">
@@ -5535,6 +5544,15 @@ function compareRenderSheet(idx) {
         ${compareRankListHTML(totalEntries.slice(0, 3), '총 비용 저렴한 순위', '총')}
       </div>
     </div>`;
+
+  el.querySelector('.compare-info-toggle').addEventListener('click', (event) => {
+    compareSaveSheets();
+    compareInfoCollapsed[idx] = !compareInfoCollapsed[idx];
+    compareSaveJSON(COMPARE_INFO_COLLAPSED_KEY, compareInfoCollapsed);
+    el.querySelector('.compare-sheet-top').hidden = compareInfoCollapsed[idx];
+    event.currentTarget.setAttribute('aria-expanded', String(!compareInfoCollapsed[idx]));
+    event.currentTarget.textContent = `차량 정보 ${compareInfoCollapsed[idx] ? '펼치기' : '접기'}`;
+  });
 
   el.querySelectorAll('.compare-input').forEach((input) => {
     input.addEventListener('input', () => {

@@ -1,4 +1,13 @@
 /* The comparison desk and compact desktop layouts. Business handlers own the data. */
+.compare-sheet-actions { display:flex; align-items:center; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+.compare-sheet-top[hidden] { display:none!important; }
+/* A single sheet exposes every lender; the page handles vertical scrolling. */
+#compare-panel .compare-card:has(.compare-sheets-row[data-single-sheet='true']) { overflow:auto; }
+#compare-panel .compare-sheets-row[data-single-sheet='true'] { flex:1 0 auto; }
+#compare-panel .compare-sheets-row[data-single-sheet='true'] .compare-body { flex:0 0 auto; flex-direction:column; min-height:0; min-width:0; }
+#compare-panel .compare-sheets-row[data-single-sheet='true'] .compare-table-scroll { flex:0 0 auto; width:100%; min-width:0; min-height:0; height:auto; max-height:none; }
+#compare-panel .compare-sheets-row[data-single-sheet='true'] .compare-rank-panel { width:100%; flex-direction:row; flex-wrap:wrap; overflow-y:visible; }
+#compare-panel .compare-sheets-row[data-single-sheet='true'] .compare-rank-box { flex:1 1 200px; }
 .journal-rail-toggle { -webkit-app-region:no-drag; display:none; }
 .workspace-eyebrow { display:block; font-size:9px; font-weight:500; letter-spacing:1.8px; line-height:1.6; color:var(--sb-muted,var(--color-text-secondary)); }
 body[data-storybook] #compare-panel { padding-top:20px; }

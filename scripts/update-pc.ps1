@@ -1,7 +1,7 @@
 # PowerShell 5.1 / 7. Installs the verified release and keeps the existing user profile.
 $ErrorActionPreference = 'Stop'
-$version = '0.39.10'
-$expectedHash = '3781b7790ad4a565c7fdc044b10172e57998a96378adc294f37e352a140ab52b'
+$version = '0.39.13'
+$expectedHash = 'a577618fac0cd448e89385862c2bbeb1e90c511ce27283333ea6ea078c24baa0'
 $projectPath = Split-Path -Parent $PSScriptRoot
 $installerPath = Join-Path $projectPath ('dist\team-notice-app-setup-' + $version + '.exe')
 if (-not (Test-Path -LiteralPath $installerPath)) {

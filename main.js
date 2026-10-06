@@ -72,7 +72,7 @@ function loadConfig() {
     const privatePath = path.join(app.getPath('userData'), 'private-config.json');
     try {
       if (fs.existsSync(privatePath)) {
-        const privateConfig = JSON.parse(fs.readFileSync(privatePath, 'utf8'));
+        const privateConfig = JSON.parse(fs.readFileSync(privatePath, 'utf8').replace(/^\uFEFF/, ''));
         if (privateConfig.openai?.apiKey) config.openai = { ...config.openai, apiKey: privateConfig.openai.apiKey };
       }
     } catch (_) { console.warn('로컬 AI 설정을 읽지 못했습니다.'); }
@@ -82,6 +82,26 @@ function loadConfig() {
 }
 
 const { config, isPlaceholder } = loadConfig();
+function getOpenAIApiKey() {
+  // Re-read the private credential at request time: startup failures must not
+  // disable AI until the application is restarted.
+  if (app.isPackaged) {
+    const privatePath = path.join(app.getPath('appData'), legacyProfileName, 'private-config.json');
+    if (fs.existsSync(privatePath)) {
+      let privateConfig;
+      try {
+        privateConfig = JSON.parse(fs.readFileSync(privatePath, 'utf8').replace(/^\uFEFF/, ''));
+      } catch (_) {
+        throw new Error('OPENAI_PRIVATE_CONFIG_UNREADABLE');
+      }
+      const key = privateConfig.openai?.apiKey;
+      if (typeof key === 'string' && key.trim() && !/^(PASTE_|YOUR_)/.test(key.trim())) return key.trim();
+    }
+  }
+  const key = config.openai?.apiKey;
+  if (typeof key !== 'string' || !key.trim() || /^(PASTE_|YOUR_)/.test(key.trim())) throw new Error('OPENAI_NOT_CONFIGURED');
+  return key.trim();
+}
 const rootAdminEmails = (config.adminEmails || []).map((e) => e.toLowerCase());
 let dynamicAdminEmails = new Set();
 
@@ -2077,10 +2097,7 @@ async function callOpenAIJson(apiKey, systemPrompt, userContent) {
 }
 
 ipcMain.handle('chulgo:ai-fill', async (_e, payload) => {
-  const apiKey = config.openai && config.openai.apiKey;
-  if (!apiKey || /^(PASTE_|YOUR_)/.test(apiKey)) {
-    throw new Error('OPENAI_NOT_CONFIGURED');
-  }
+  const apiKey = getOpenAIApiKey();
   const { text, candidates, companyList, financeAliases } = payload || {};
   if (!text || !text.trim()) throw new Error('분석할 내용을 입력해주세요.');
 
@@ -2343,10 +2360,7 @@ ipcMain.handle('shortcuts:open', async (_e, { id } = {}) => {
 });
 
 ipcMain.handle('ai:chat', async (_e, payload) => {
-  const apiKey = config.openai && config.openai.apiKey;
-  if (!apiKey || /^(PASTE_|YOUR_)/.test(apiKey)) {
-    throw new Error('OPENAI_NOT_CONFIGURED');
-  }
+  const apiKey = getOpenAIApiKey();
   const { messages, today } = payload || {};
   if (!Array.isArray(messages) || !messages.length) throw new Error('메시지가 없습니다.');
 
