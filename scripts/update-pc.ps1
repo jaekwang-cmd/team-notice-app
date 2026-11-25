@@ -1,4 +1,4 @@
-# PowerShell 5.1 / 7. Installs the verified release and keeps the existing user profile.
+﻿# PowerShell 5.1 / 7. Installs the verified release and keeps the existing user profile.
 $ErrorActionPreference = 'Stop'
 $version = '0.39.14'
 $expectedHash = '32be2666c95a3a3028f8611bfc363c8b29fab8e2b59ab4069bdee0cd6f326f7c'
