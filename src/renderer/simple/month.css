@@ -1,0 +1,110 @@
+.sdm-month {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  container-type: inline-size;
+  color: #203832;
+  background: #fff;
+  border: 1px solid #dce7e2;
+  border-radius: 20px;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+main#main:has(> .sdm-month) {
+  max-width: none;
+  width: 100%;
+  height: 100dvh;
+  padding: clamp(4px, .65vw, 10px);
+  margin: 0;
+}
+.sdm-toolbar, .sdm-controls, .sdm-day-top, .sdm-counts, .sdm-legend,
+.sdm-count, .sdm-legend span {
+  display: flex;
+  align-items: center;
+}
+.sdm-toolbar { justify-content: space-between; gap: 12px; padding: 20px 24px; }
+.sdm-title { margin: 0; font: inherit; font-size: clamp(19px, 2vw, 25px); font-weight: 750; letter-spacing: -.055em; }
+.sdm-controls { gap: 4px; }
+.sdm-status { display: flex; align-items: center; gap: 6px; margin-left: auto; color: #4d685c; font-size: 12px; }
+.sdm-status .sdm-control { font-size: 12px; }
+.sdm-control {
+  appearance: none;
+  background: #fff;
+  color: #334e46;
+  border: 1px solid #dce7e2;
+  border-radius: 8px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.sdm-control:first-child, .sdm-control:last-child { font-size: 22px; line-height: 1; }
+.sdm-control:nth-child(2) { font-size: 13px; }
+.sdm-control:hover, .sdm-day:hover { background-color: #f1f8f5; }
+.sdm-control:focus-visible, .sdm-day:focus-visible { outline: 2px solid #18836b; outline-offset: -3px; }
+.sdm-calendar { display: grid; flex: 1; min-height: 0; overflow-y: auto; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: auto repeat(var(--week-count), minmax(58px, 1fr)); }
+.sdm-weekday { font-size: 12px; font-weight: 650; text-align: start; color: #53685e; background: #f4f7f5; padding: 8px 15px; }
+.sdm-sunday { color: #a9544e; }
+.sdm-day {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: #fff;
+  border: 0;
+  border-top: 1px solid #e1e9e5;
+  border-inline-end: 1px solid #e1e9e5;
+  border-radius: 0;
+  margin: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 10px;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.sdm-day:nth-child(7n) { border-inline-end: 0; }
+.sdm-day.sdm-sunday { color: #a9544e; }
+.sdm-day.sdm-outside { background: #f8faf9; color: #78867f; }
+.sdm-day.sdm-selected { background: #eff8f4; }
+.sdm-day-top { justify-content: space-between; width: 100%; gap: 2px; }
+.sdm-number {
+  display: inline-grid;
+  place-items: center;
+  min-width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 650;
+}
+.sdm-day[aria-current="date"] .sdm-number { background: #166b56; color: #fff; }
+.sdm-counts { flex-wrap: wrap; gap: 4px; }
+.sdm-count { gap: 3px; color: #346b55; font-size: 11px; font-weight: 650; }
+.sdm-count-done { color: #65766b; }
+.sdm-count::before, .sdm-legend span::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #378165; }
+.sdm-count-done::before, .sdm-legend .sdm-legend-done::before { background: #99a79f; }
+.sdm-lines { display: grid; gap: 3px; width: 100%; min-width: 0; }
+.sdm-events { display: grid; flex-shrink: 0; width: 100%; min-width: 0; gap: 2px; }
+.sdm-events:empty { display: none; }
+.sdm-event { padding: 1px 4px; border-inline-start: 3px solid #458775; background: #f1f6f4; border-radius: 3px; color: #183c32; font-size: 13px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+.sdm-more { color: #4f6559; font-size: 11px; line-height: 1.25; }
+.sdm-line { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #365347; font-size: 12px; line-height: 1.45; }
+.sdm-line-done { color: #6d7871; text-decoration: line-through; }
+.sdm-legend { border-top: 1px solid #e1e9e5; justify-content: flex-end; gap: 14px; padding: 10px 16px; color: #52645c; font-size: 12px; }
+.sdm-legend span { gap: 5px; }
+@container (max-width: 620px) {
+  .sdm-toolbar { padding: 14px; }
+  .sdm-weekday { text-align: center; padding: 7px 0; }
+  .sdm-day { padding: 5px 3px; }
+  .sdm-day-top { gap: 2px; flex-wrap: wrap; }
+  .sdm-event { font-size: 11px; }
+  .sdm-lines { display: none; }
+  .sdm-counts { justify-content: center; }
+  .sdm-control { min-width: 36px; height: 36px; }
+}

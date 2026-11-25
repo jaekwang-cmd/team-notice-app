@@ -106,7 +106,9 @@ async function loadGoogleEventsForGrid(gridStart) {
     });
     eventsByDate = map;
     multiDayEvents = multiDay;
+    window.simpleMode?.receivedEvents(gridStart, events);
   } catch (err) {
+    if (requestUser === currentUser && isGoogleSignedIn) window.simpleMode?.receivedEvents(gridStart, null);
     console.error('구글 캘린더 이벤트 로드 실패:', err);
     // A failed read must not erase previously displayed events or saved drafts.
   }
@@ -435,6 +437,7 @@ function renderGoogleStatus() {
     googleStatus.appendChild(label);
     googleStatus.appendChild(btn);
   }
+  window.simpleMode?.authChanged();
 }
 
 function escapeHtml(str) {
@@ -765,6 +768,9 @@ document.addEventListener('click', (e) => {
 
 let selectedDateStr = null;
 let editingEventId = null;
+let editingSimpleEvent = null;
+let editingAccount = null;
+let simpleCreateAttempt = null;
 let eventFormRevision = 0;
 const eventSavesInFlight = new Set();
 let editingTeamEventId = null;
@@ -779,7 +785,7 @@ function formatEventTime(ev) {
 
 function renderDayEventList() {
   dayEventList.innerHTML = '';
-  const events = eventsByDate.get(selectedDateStr) || [];
+  const events = window.simpleMode?.detail.open ? window.simpleMode.onDay(selectedDateStr) : eventsByDate.get(selectedDateStr) || [];
 
   if (events.length === 0) {
     const empty = document.createElement('div');
@@ -822,12 +828,14 @@ function renderDayEventList() {
 
       const delBtn = document.createElement('button');
       delBtn.textContent = '삭제';
+      const deletionAccount = currentUser.uid;
       delBtn.onclick = async () => {
         const msg = ev.teamEventId
           ? '이 팀 공유 일정을 삭제할까요? (모든 팀원 캘린더에서 삭제됩니다)'
           : '이 일정을 삭제할까요? (구글 캘린더에서도 삭제됩니다)';
         if (!(await confirmCalendarAction(msg))) return;
         try {
+          if (!isGoogleSignedIn || deletionAccount !== currentUser.uid) throw Error('로그인 계정이 바뀌었어요. 일정을 다시 열어 주세요.');
           if (ev.teamEventId) {
             await window.api.deleteTeamEvent(ev.teamEventId);
           } else {
@@ -856,6 +864,9 @@ function renderDayEventList() {
 
 function showEventForm(ev) {
   const revision = ++eventFormRevision;
+  editingSimpleEvent = window.simpleMode?.detail.open ? ev : null;
+  editingAccount = currentUser.uid;
+  simpleCreateAttempt = null;
   document.getElementById('event-save').disabled = false;
   editingEventId = ev && !ev.teamEventId ? ev.id : null;
   editingTeamEventId = ev && ev.teamEventId ? ev.teamEventId : null;
@@ -899,6 +910,9 @@ function showEventForm(ev) {
 
 function hideEventForm() {
   eventFormRevision++;
+  editingSimpleEvent = null;
+  editingAccount = null;
+  simpleCreateAttempt = null;
   eventForm.classList.add('hidden');
   eventAddBtn.classList.remove('hidden');
   editingEventId = null;
@@ -921,11 +935,15 @@ eventCancelBtn.onclick = hideEventForm;
 function buildEventTimesFromForm() {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   if (eventAlldayCheckbox.checked) {
+    if (editingSimpleEvent?.allDay) return { start: {date: editingSimpleEvent.start}, end: {date: editingSimpleEvent.end} };
     return { start: { date: selectedDateStr }, end: { date: addDaysStr(selectedDateStr, 1) } };
   }
+  const timed = editingSimpleEvent && !editingSimpleEvent.allDay;
+  const startsOn = timed ? toDateStr(new Date(editingSimpleEvent.start)) : selectedDateStr;
+  const endsOn = timed ? toDateStr(new Date(editingSimpleEvent.end)) : selectedDateStr;
   return {
-    start: { dateTime: `${selectedDateStr}T${eventStartTime.value}:00`, timeZone },
-    end: { dateTime: `${selectedDateStr}T${eventEndTime.value}:00`, timeZone },
+    start: { dateTime: `${startsOn}T${eventStartTime.value}:00`, timeZone },
+    end: { dateTime: `${endsOn}T${eventEndTime.value}:00`, timeZone },
   };
 }
 
@@ -944,6 +962,7 @@ eventForm.addEventListener('submit', async (e) => {
   eventSavesInFlight.add(revision);
   saveBtn.disabled = true;
   try {
+    if (!isGoogleSignedIn || editingAccount !== currentUser.uid) throw Error('로그인 계정이 바뀌었어요. 일정을 다시 열어 주세요.');
     if (editingTeamEventId) {
       await window.api.updateTeamEvent({
         id: editingTeamEventId,
@@ -957,9 +976,14 @@ eventForm.addEventListener('submit', async (e) => {
     } else if (asTeamEvent) {
       await window.api.createTeamEvent({ title: summary, start, end, allDay: eventAlldayCheckbox.checked });
     } else {
-      await window.api.googleCreateEvent({ summary, start, end, colorId: selectedEventColorId });
+      const payload = { summary, start, end, colorId: selectedEventColorId };
+      if (window.simpleMode?.detail.open) {
+        if (simpleCreateAttempt?.draft !== submittedDraft) simpleCreateAttempt = { draft:submittedDraft, id:crypto.randomUUID() };
+        payload.operationId = simpleCreateAttempt.id;
+      }
+      await window.api.googleCreateEvent(payload);
     }
-    const currentTimes = buildEventTimesFromForm();
+    const currentTimes = revision === eventFormRevision ? buildEventTimesFromForm() : {};
     const currentDraft = JSON.stringify([eventTitleInput.value.trim(), currentTimes.start, currentTimes.end, selectedEventColorId,
       !editingEventId && !editingTeamEventId && eventTeamShareCheckbox.checked]);
     if (revision === eventFormRevision && submittedDraft === currentDraft) {
@@ -1528,6 +1552,7 @@ const accountDeleteEmailEl = document.getElementById('account-delete-email');
 const accountDeleteConfirmInput = document.getElementById('account-delete-confirm-input');
 const accountDeleteConfirmBtn = document.getElementById('account-delete-confirm-btn');
 const accountDeleteStatus = document.getElementById('account-delete-status');
+let accountDeleteUid;
 
 function accountDeleteResetInputState() {
   accountDeleteConfirmBtn.disabled = accountDeleteConfirmInput.value.trim() !== '삭제';
@@ -1538,6 +1563,7 @@ document.getElementById('account-delete-open').addEventListener('click', () => {
     showToast('로그인 상태에서만 계정을 삭제할 수 있습니다.');
     return;
   }
+  accountDeleteUid = currentUser.uid;
   accountDeleteEmailEl.textContent = currentUser.email || '';
   accountDeleteConfirmInput.value = '';
   accountDeleteConfirmBtn.disabled = true;
@@ -1562,10 +1588,11 @@ function accountDeleteFinishSignedOutUI() {
 }
 
 accountDeleteConfirmBtn.addEventListener('click', async () => {
+  const uid = accountDeleteUid;
   accountDeleteConfirmBtn.disabled = true;
   accountDeleteStatus.textContent = '삭제 중...';
   try {
-    await window.api.deleteAccount();
+    await window.api.deleteAccount(uid);
     accountDeletePopup.classList.add('hidden');
     accountDeleteFinishSignedOutUI();
     showToast('계정이 삭제되었습니다.');
@@ -1584,8 +1611,13 @@ accountDeleteConfirmBtn.addEventListener('click', async () => {
   try {
     await window.api.googleSignIn();
     currentUser = await window.api.getCurrentUser();
+    if (currentUser.uid !== uid) {
+      accountDeletePopup.classList.add('hidden');
+      showToast('계정이 바뀌어 삭제 요청을 취소했어요.');
+      return;
+    }
     accountDeleteStatus.textContent = '다시 삭제 시도 중...';
-    await window.api.deleteAccount();
+    await window.api.deleteAccount(uid);
     accountDeletePopup.classList.add('hidden');
     accountDeleteFinishSignedOutUI();
     showToast('계정이 삭제되었습니다.');
@@ -1801,6 +1833,7 @@ window.api.onAuthUpdated(async (user) => {
     renderFinance();
     memos = []; eventsByDate = new Map(); multiDayEvents = [];
     isGoogleSignedIn = false;
+    window.simpleMode?.authChanged();
     orgMembersCache = []; orgTeamsCache = [];
     orgListWrap.replaceChildren(); orgLedgerWrap.replaceChildren(); orgLedgerSummaryEl.textContent = '';
     document.getElementById('org-history-list').replaceChildren();

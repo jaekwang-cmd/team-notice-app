@@ -1,0 +1,73 @@
+#simple-pane { flex: 1 1 0; width: 100%; min-height: 0; display: none; border: 0; background: #f6f8f8; }
+body[data-simple-mode] #simple-pane { display: block; }
+body[data-simple-mode] .app-main-col > :not(.titlebar):not(#simple-pane),
+body[data-simple-mode] .app-sidebar > :not(.journal-brand):not(.simple-nav):not(.journal-side-life),
+body[data-simple-mode] .titlebar :is(.journal-theme-picker,#btn-settings,.titlebar-shortcuts),
+body:not([data-simple-mode]) .simple-nav,
+body:not([data-simple-mode]) :is(#open-daily-widget,#simple-google-button) { display: none !important; }
+body[data-simple-mode] .app-main-col { background: #f6f8f8; }
+body[data-simple-mode] .titlebar { background: #ffffff; border-bottom: 1px solid #dce5e2; }
+#mode-switch { -webkit-app-region: no-drag; display: flex; gap: 2px; align-items: center; background: #f0f4f1; border-radius: 8px; padding: 2px; flex-shrink: 0; }
+#mode-switch button { border: none; background: transparent; color: #476258; border-radius: 6px; font: 600 12px/1.4 "Malgun Gothic",sans-serif; padding: 5px 10px; cursor: pointer; }
+#mode-switch button[aria-pressed=true] { background: #11695f; color: #fff; }
+#open-daily-widget { -webkit-app-region:no-drag; background:#e8f2ed; color:#245849; border:1px solid #c4dbd0; border-radius:7px; font:650 13px/1.4 "Malgun Gothic",sans-serif; padding:5px 10px; cursor:pointer; flex-shrink:0; }
+#open-daily-widget:disabled { opacity:.55; }
+#widget-open-status { position:fixed; inset:auto 16px 16px auto; z-index:99000; padding:10px 14px; background:#274237; color:#fff; font:14px sans-serif; border-radius:8px; }
+body[data-simple-mode] .simple-nav[aria-pressed=true] { background: var(--sb-paper,#fff); color: var(--sb-accent,#11695f); }
+body[data-simple-mode] .simple-nav .sidebar-nav-icon { font-family: sans-serif; }
+body[data-storybook][data-simple-mode] .app-sidebar {
+  width: max(116px, calc(108px * var(--ui-font-scale,1))); padding: 8px 5px; gap: 3px; overflow-x: hidden;
+  background: var(--sb-rail); box-shadow: none;
+}
+body[data-storybook][data-simple-mode] .app-sidebar .journal-brand {
+  min-height: 39px; gap: 7px; padding: 2px 6px 9px;
+}
+body[data-storybook][data-simple-mode] .journal-brand-mark {
+  flex: 0 0 22px; width: 22px; height: 26px; border-radius: 4px; font-size: 15px; box-shadow:none;
+}
+body[data-storybook][data-simple-mode] .journal-brand strong { font-size: 17px; letter-spacing: -.03em; }
+body[data-storybook][data-simple-mode] .app-sidebar :is(.journal-brand small,.journal-nav-caption,.journal-side-life) { display: none !important; }
+body[data-storybook][data-simple-mode] .app-sidebar button.simple-nav {
+  min-height: 36px; padding: 6px 2px; gap: 2px; border-radius: 6px; font: 500 12px/1.4 "Malgun Gothic",sans-serif;
+}
+body[data-storybook][data-simple-mode] .simple-nav .sidebar-nav-icon { flex: 0 0 15px; width: 15px; font-size: 15px; }
+body[data-storybook][data-simple-mode] .simple-nav .sidebar-nav-label { flex: 1 1 auto; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
+body[data-storybook][data-simple-mode][data-rail-collapsed] .app-sidebar { width: 48px; }
+body[data-storybook][data-simple-mode][data-rail-collapsed] .app-sidebar .journal-brand { padding-inline: 0; }
+#simple-calendar-detail {
+  position: fixed; inset: 56px 0 0; margin: auto;
+  box-sizing: border-box; width: min(450px, 94vw); max-height: calc(100dvh - 80px); overflow: auto;
+  -webkit-app-region: no-drag;
+  padding: 0; border: 1px solid #cad9d1; border-radius: 14px;
+  box-shadow: 0 20px 60px #172e2933; background: var(--sb-paper, #fff); color: var(--sb-ink, #233831);
+}
+/* Electron's native drag regions can intercept clicks even through a modal backdrop. */
+body:has(#simple-calendar-detail[open]) :is(.titlebar, .journal-brand) { -webkit-app-region: no-drag; }
+#simple-calendar-detail #day-panel-close {
+  -webkit-app-region: no-drag;
+  position: relative; display: grid; place-items: center; flex: 0 0 48px;
+  width: 48px; height: 48px; min-height: 48px; padding: 0; border: 0; border-radius: 0;
+  line-height: 1; cursor: pointer; transform: none; filter: none; box-shadow: none; background: transparent;
+}
+#simple-calendar-detail #day-panel-close::before {
+  content: ""; position: absolute; inset: 4px; border-radius: 8px;
+  border: 1px solid var(--sb-line,#bccbc3); pointer-events: none;
+}
+#simple-calendar-detail #day-panel-close:is(:hover,:focus-visible)::before { border-color: var(--sb-accent,#277357); }
+#simple-calendar-detail #day-panel-close:focus-visible { outline: 2px solid var(--sb-accent,#277357); outline-offset: -2px; }
+#simple-calendar-detail::backdrop { background: #182f2947; }
+#simple-calendar-detail .day-panel {
+  display: flex; flex-direction: column; box-sizing: border-box; position: static;
+  padding: 19px 21px; width: 100%; max-width: none; min-width: 0; max-height: none;
+  border: 0; background: transparent;
+}
+#simple-calendar-detail .day-panel-resizer { display: none; }
+#simple-calendar-detail .day-event-list { overflow: visible; max-height: none; }
+body[data-simple-mode] #simple-google-button { -webkit-app-region:no-drag; flex:none; border:1px solid #cddbd4; background:#fff; color:#245c4b; border-radius:7px; padding:5px 9px; font:600 12px/1.4 "Malgun Gothic",sans-serif; }
+body[data-simple-mode] #simple-google-button[data-connected] { background:#edf5f0; }
+body[data-simple-mode] #simple-google-button:disabled { cursor:default; }
+body[data-simple-mode] .titlebar #simple-google-button { margin-left:auto; }
+#mode-switch button { white-space: nowrap; }
+#simple-account-menu { position:fixed; inset:auto; margin:0; max-width: min(320px,90vw); padding:13px; background:#fff; color:#20362f; border:1px solid #d1ddd5; border-radius:9px; box-shadow:0 4px 20px #123a281a; }
+#simple-account-menu p { margin:0 0 9px; overflow-wrap:anywhere; }
+#simple-account-menu button { padding:5px 9px; border:1px solid #ccdad5; border-radius:6px; background:#fff; color:inherit; cursor:pointer; }

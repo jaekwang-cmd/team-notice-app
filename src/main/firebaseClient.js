@@ -13,6 +13,9 @@ const {
   onSnapshot,
   serverTimestamp,
   getDocs,
+  getDocsFromServer,
+  limit,
+  writeBatch,
   getDoc,
 } = require('firebase/firestore');
 
@@ -70,9 +73,25 @@ async function setAdmins(db, emails) {
 // 않는다 — 삭제 확인 문구에도 이 사실을 그대로 안내한다. deleteUser는 마지막 로그인이
 // 오래됐으면 auth/requires-recent-login으로 실패할 수 있는데, 그건 호출한 쪽(main.js)이
 // 구분해서 재로그인을 안내한다.
-async function deleteFirebaseAccount(auth, db) {
+async function deleteFirebaseAccount(auth, db, expectedUid) {
   const user = auth.currentUser;
-  if (!user) throw new Error('NOT_SIGNED_IN');
+  if (!user || user.uid !== expectedUid) throw new Error('ACCOUNT_CHANGED');
+  const token = await user.getIdTokenResult();
+  if (!(Date.now() - Date.parse(token.authTime) < 4 * 60 * 1000)) {
+    const error = new Error('REQUIRES_RECENT_LOGIN');
+    error.code = 'auth/requires-recent-login';
+    throw error;
+  }
+  const tasks = query(collection(db, 'users', expectedUid, 'simpleTasks'), limit(400));
+  for (;;) {
+    if (auth.currentUser !== user) throw new Error('ACCOUNT_CHANGED');
+    const page = await getDocsFromServer(tasks);
+    if (auth.currentUser !== user) throw new Error('ACCOUNT_CHANGED');
+    if (page.empty) break;
+    const batch = writeBatch(db);
+    for (const task of page.docs) batch.delete(task.ref);
+    await batch.commit();
+  }
   const email = (user.email || '').toLowerCase();
   try {
     const adminsRef = doc(db, 'settings', 'admins');
@@ -85,6 +104,7 @@ async function deleteFirebaseAccount(auth, db) {
     // 관리자 목록 정리는 부수 작업이라, 실패해도 계정 삭제 자체는 계속 진행한다.
     console.error('[account-delete] 관리자 목록 정리 실패(계속 진행):', err);
   }
+  if (auth.currentUser !== user) throw new Error('ACCOUNT_CHANGED');
   await deleteUser(user);
 }
 

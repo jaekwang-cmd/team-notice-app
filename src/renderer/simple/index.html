@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>여백 간편모드</title>
+  <link rel="stylesheet" href="day.css">
+  <link rel="stylesheet" href="month.css">
+  <script defer src="month.js"></script>
+  <script defer src="task-data.js"></script>
+  <script defer src="task-store.js"></script>
+  <script defer src="day.js"></script>
+  <script defer src="frame.js"></script>
+</head>
+<body>
+  <nav class="views" aria-label="화면 선택" hidden>
+    <button type="button" data-view="day" aria-current="page">금일 할 일</button>
+    <button type="button" data-view="month">월간 다이어리</button>
+  </nav>
+  <main id="main"></main>
+  <div class="toast" id="notice" hidden><span role="status" id="message"></span><button id="undo" type="button" hidden>되돌리기</button></div>
+</body>
+</html>

@@ -5,7 +5,7 @@ if(!host || !/^(127\.0\.0\.1|localhost):\d+$/.test(host))throw Error('Local emul
 const base=`http://${host}/v1/projects/${project}/databases/(default)/documents/`;
 const encode=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
 function token(uid,email='member@example.test',verified=true){return `${encode({alg:'none',typ:'JWT'})}.${encode({sub:uid,user_id:uid,aud:project,iss:`https://securetoken.google.com/${project}`,iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+3600,email,email_verified:verified,firebase:{sign_in_provider:'google.com'}})}.`}
-function fields(data){return Object.fromEntries(Object.entries(data).map(([k,v])=>[k,v===null?{nullValue:null}:typeof v==='boolean'?{booleanValue:v}:Array.isArray(v)?{arrayValue:{values:v.map(x=>({stringValue:x}))}}:{stringValue:v}]))}
+function fields(data){return Object.fromEntries(Object.entries(data).map(([k,v])=>[k,v===null?{nullValue:null}:typeof v==='boolean'?{booleanValue:v}:typeof v==='number'?{integerValue:v}:Array.isArray(v)?{arrayValue:{values:v.map(x=>({stringValue:x}))}}:{stringValue:v}]))}
 async function req(path,method='GET',data,auth='owner'){const r=await fetch(base+path,{method,headers:{Authorization:`Bearer ${auth}`,'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify({fields:fields(data)})});if(!r.ok&&r.status!==403)throw Error(`${method} ${path}: ${r.status} ${await r.text()}`);return r.status;}
 (async()=>{let count=0;async function allow(...args){assert.ok((await req(...args))<300,`allowed ${args[0]}`);count++}async function deny(...args){assert.equal(await req(...args),403,`denied ${args[0]}`);count++}
 const member=token('member'),other=token('other'),root=token('root','workt98@gmail.com'),fakeRoot=token('root','workt98@gmail.com',false),admin=token('admin','calendar@example.test'),superAdmin=token('super');
@@ -21,6 +21,20 @@ await deny('financeCredentials/forged','PATCH',{authorUid:'member',organization:
 await allow('orgMembers/new-member','PATCH',{uid:'new-member',permission:'member',organization:null,teamId:null,active:true},token('new-member'));
 await deny('orgMembers/fake-admin','PATCH',{uid:'fake-admin',permission:'superAdmin',organization:null,teamId:null,active:true},token('fake-admin'));
 await allow('memos/mine','DELETE',undefined,member);
+const taskPath = 'users/member/simpleTasks/one';
+const task = { day: '2026-11-25', title: '일정 확인', done: false, createdAt: 1700000000000 };
+await allow(taskPath, 'PATCH', task, member);
+await allow('users/member/simpleTasks', 'GET', undefined, member);
+await allow(taskPath, 'PATCH', {...task, done:true}, member);
+await deny(taskPath, 'GET', undefined, other);
+await deny('users/member/simpleTasks', 'GET', undefined, other);
+await deny(taskPath, 'DELETE', undefined, other);
+await deny(taskPath, 'PATCH', task, other);
+await deny(taskPath, 'GET', undefined, superAdmin);
+await deny(taskPath, 'PATCH', {...task, createdAt:12}, member);
+await deny('users/member/simpleTasks/extra', 'PATCH', {...task, extra:'x'}, member);
+await deny('users/member/simpleTasks/invalid', 'PATCH', {...task, title:''}, member);
+await allow(taskPath, 'DELETE', undefined, member);
 await allow('financeCredentials/valid','DELETE',undefined,superAdmin);
 console.log(`PASS ${count} Firestore allow/deny assertions in disposable emulator`);
 })().catch(e=>{console.error(e);process.exitCode=1});

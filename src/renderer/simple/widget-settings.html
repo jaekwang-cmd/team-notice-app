@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'; object-src 'none'">
+  <title>여백 · 위젯 설정</title>
+  <link rel="stylesheet" href="widget-settings.css">
+  <script src="widget-settings.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>위젯 설정</h1>
+    <button type="button" id="close" title="설정 닫기" aria-label="설정 닫기">×</button>
+  </header>
+  <main>
+    <fieldset id="modes">
+      <legend>다른 창과 겹칠 때</legend>
+      <div class="options">
+        <label><input type="radio" name="mode" value="top"><span>항상 위</span></label>
+        <label><input type="radio" name="mode" value="through"><span>클릭 통과</span></label>
+        <label><input type="radio" name="mode" value="desktop"><span>바탕화면에만</span></label>
+      </div>
+      <p class="hint" id="mode-hint" aria-live="polite"></p>
+    </fieldset>
+    <fieldset>
+      <legend>바탕색</legend>
+      <div class="colors" id="colors"></div>
+    </fieldset>
+    <section class="slider-section">
+      <div class="slider-label"><label for="opacity">투명도</label><output id="opacity-output" for="opacity"></output></div>
+      <input type="range" id="opacity" min="0" max="85" step="1">
+      <div class="range-ends" aria-hidden="true"><span>불투명</span><span>투명</span></div>
+    </section>
+    <fieldset class="type-controls">
+      <legend>글자 색</legend>
+      <div class="colors" id="text-colors"></div>
+      <label class="custom-color"><span>직접 선택</span><input type="color" id="text-color-custom" aria-label="직접 선택할 글자 색" value="#1d3434"></label>
+    </fieldset>
+    <fieldset>
+      <legend>글자 굵기</legend>
+      <div class="options weights">
+        <label><input type="radio" name="fontWeight" value="400"><span>보통</span></label>
+        <label><input type="radio" name="fontWeight" value="500"><span>중간</span></label>
+        <label><input type="radio" name="fontWeight" value="600"><span>약간 굵게</span></label>
+        <label><input type="radio" name="fontWeight" value="700"><span>굵게</span></label>
+        <label><input type="radio" name="fontWeight" value="800"><span>아주 굵게</span></label>
+      </div>
+    </fieldset>
+    <section class="slider-section">
+      <div class="slider-label"><label for="font-size">글자 크기</label><output id="font-size-output" for="font-size">16px</output></div>
+      <input type="range" id="font-size" min="12" max="32" step="1" value="16">
+      <div class="range-ends" aria-hidden="true"><span>12px</span><span>32px</span></div>
+    </section>
+    <fieldset>
+      <legend>보여줄 일정</legend>
+      <div class="options">
+        <label><input type="radio" name="filter" value="all"><span>전체</span></label>
+        <label><input type="radio" name="filter" value="pending"><span>남은 할 일</span></label>
+        <label><input type="radio" name="filter" value="done"><span>완료한 일</span></label>
+      </div>
+    </fieldset>
+    <p id="error" role="status" hidden></p>
+  </main>
+</body>
+</html>

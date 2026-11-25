@@ -128,6 +128,7 @@ let orgSubscriptionGeneration = 0;
 
 let mainWindow;
 let tray = null;
+let dailyWidget;
 let isQuitting = false;
 let isPinned = false;
 let firebaseHandle = null;
@@ -269,7 +270,15 @@ function createTray() {
   const trayIcon = nativeImage.createFromPath(APP_ICON_PATH).resize({ width: 32, height: 32 });
   tray = new Tray(trayIcon);
   tray.setToolTip('여백');
+  refreshTrayMenu();
+  tray.on('click', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
 
+function refreshTrayMenu() {
+  if (!tray) return;
   const contextMenu = Menu.buildFromTemplate([
     {
       label: '열기',
@@ -278,6 +287,7 @@ function createTray() {
         mainWindow.focus();
       },
     },
+    ...(dailyWidget?.trayItems() || []),
     { type: 'separator' },
     {
       label: '종료',
@@ -288,11 +298,6 @@ function createTray() {
     },
   ]);
   tray.setContextMenu(contextMenu);
-
-  tray.on('click', () => {
-    mainWindow.show();
-    mainWindow.focus();
-  });
 }
 
 // --- 왼쪽 메모장 = Google Tasks("내 할 일 목록") + 로컬 정밀 알람 ---
@@ -809,6 +814,15 @@ function sleep(ms) {
 // 출고 장부, etc.) stayed empty with no visible error. Retrying here closes that window.
 let firebaseAuthTransition = Promise.resolve();
 let firebaseSigningSession = null;
+let taskLoginRequests = 0;
+function simpleTaskIdentity() {
+  if (taskLoginRequests) return { pending:true };
+  if (!googleAuth.isSignedIn()) return { uid:null };
+  const user = firebaseHandle?.auth.currentUser;
+  const googleId = googleAuth.getAccountId();
+  const matches = googleId && user?.providerData.some(provider => provider.providerId === 'google.com' && provider.uid === googleId);
+  return matches ? {uid:user.uid} : {pending:true};
+}
 function signInFirebaseForSession(idToken, session) {
   const operation = firebaseAuthTransition.catch(() => {}).then(async () => {
     if (!firebaseHandle || session !== googleAuth.getSessionGeneration() || !googleAuth.isSignedIn()) return;
@@ -847,6 +861,7 @@ async function trySignInFirebaseFromStoredGoogleSession() {
 // once, regardless of timing.
 function setupAuthStateListener() {
   firebaseClient.onAuthStateChangedListener(firebaseHandle.auth, (user) => {
+    dailyWidget?.tasks.refresh();
     if (user && firebaseSigningSession !== null && firebaseSigningSession !== googleAuth.getSessionGeneration()) return;
     if (user && !googleAuth.isSignedIn()) {
       firebaseClient.signOutFirebase(firebaseHandle.auth).catch(console.error);
@@ -1205,7 +1220,13 @@ if (!gotSingleInstanceLock) {
 app.whenReady().then(() => {
   if (!gotSingleInstanceLock) return;
   createWindow();
+  dailyWidget = require('./src/main/simple-widget.cjs').installSimpleWidget(
+    () => mainWindow, refreshTrayMenu, () => tray?.displayBalloon({
+      title: '할 일 위젯', content: '바탕화면 감지를 시작할 수 없어 항상 위로 전환했어요.',
+    }), simpleTaskIdentity, () => firebaseHandle.db
+  );
   createTray();
+  dailyWidget.restore();
 
   // 지난번에 할 일 위젯을 띄워둔 채로 껐다면, 이번에도 자동으로 같이 띄운다.
   if (settingsStore.get(TASKS_WIDGET_WAS_OPEN_KEY)) createTasksWidgetWindow();
@@ -1319,7 +1340,11 @@ ipcMain.handle('calendar:get-holidays', (_e, year) => koreanHolidays.getHolidays
 // --- Google Calendar + Firebase identity (one Google login covers both) ---
 ipcMain.handle('google:is-signed-in', () => googleAuth.isSignedIn());
 ipcMain.handle('google:sign-in', async () => {
-  const { idToken } = await googleAuth.signIn(config.google);
+  taskLoginRequests++;
+  dailyWidget.tasks.refresh();
+  let idToken;
+  try { ({ idToken } = await googleAuth.signIn(config.google)); }
+  finally { taskLoginRequests--; dailyWidget.tasks.refresh(); }
   const session = googleAuth.getSessionGeneration();
   stopMemosSubscription();
   stopTeamEventsSubscription();
@@ -1337,6 +1362,7 @@ ipcMain.handle('google:sign-in', async () => {
 });
 ipcMain.handle('google:sign-out', async () => {
   googleAuth.signOut();
+  dailyWidget.tasks.refresh();
   stopMemosSubscription();
   stopTeamEventsSubscription();
   stopOrgMemberSelfSubscription();
@@ -1383,19 +1409,24 @@ ipcMain.handle('admin:set-list', async (_e, emails) => {
 
 // --- 계정 삭제 (Google Play 정책 대응) — 로그인 계정만 지우고, 출고/정산 기록은
 // 회사 보존 자료라 그대로 둔다(firebaseClient.deleteFirebaseAccount 주석 참고).
-ipcMain.handle('auth:delete-account', async () => {
+ipcMain.handle('auth:delete-account', async (event, uid) => {
   if (!firebaseHandle) throw new Error('FIREBASE_NOT_CONFIGURED');
-  if (!firebaseHandle.auth.currentUser) throw new Error('NOT_SIGNED_IN');
+  if (event.sender !== mainWindow?.webContents || event.senderFrame !== event.sender.mainFrame ||
+      !uid || firebaseHandle.auth.currentUser?.uid !== uid) throw new Error('ACCOUNT_CHANGED');
+  const generation = googleAuth.getSessionGeneration();
   try {
-    await firebaseClient.deleteFirebaseAccount(firebaseHandle.auth, firebaseHandle.db);
+    await dailyWidget.tasks.suspendForDeletion(uid);
+    await firebaseClient.deleteFirebaseAccount(firebaseHandle.auth, firebaseHandle.db, uid);
   } catch (err) {
+    dailyWidget.tasks.resumeAfterDeletion(uid);
     if (err && err.code === 'auth/requires-recent-login') {
       throw new Error('REQUIRES_RECENT_LOGIN');
     }
     console.error('[auth:delete-account] 실패:', err);
     throw new Error('계정 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.');
   }
-  googleAuth.signOut();
+  dailyWidget.tasks.forgetAccount(uid);
+  if (generation === googleAuth.getSessionGeneration()) googleAuth.signOut();
   return { deleted: true };
 });
 

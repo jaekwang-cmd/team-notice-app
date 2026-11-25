@@ -8,6 +8,14 @@ contextBridge.exposeInMainWorld('api', {
   getWindowSize: () => ipcRenderer.invoke('window:get-size'),
   setWindowSize: (size) => ipcRenderer.invoke('window:set-size', size),
   openTasksWidget: () => ipcRenderer.invoke('tasks-widget:open'),
+  openSimpleWidget: date => ipcRenderer.invoke('simple-widget:open', date),
+  readSimpleTasks: () => ipcRenderer.invoke('simple-tasks:read'),
+  mutateSimpleTask: op => ipcRenderer.invoke('simple-tasks:change', op),
+  onSimpleTasks: callback => {
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('simple-tasks:state', listener);
+    return () => ipcRenderer.removeListener('simple-tasks:state', listener);
+  },
 
   getAutostart: () => ipcRenderer.invoke('settings:get-autostart'),
   setAutostart: (enabled) => ipcRenderer.invoke('settings:set-autostart', enabled),
@@ -34,7 +42,7 @@ contextBridge.exposeInMainWorld('api', {
 
   getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
   refreshAuth: () => ipcRenderer.invoke('auth:refresh'),
-  deleteAccount: () => ipcRenderer.invoke('auth:delete-account'),
+  deleteAccount: uid => ipcRenderer.invoke('auth:delete-account', uid),
 
   getAdminList: () => ipcRenderer.invoke('admin:get-list'),
   setAdminList: (emails) => ipcRenderer.invoke('admin:set-list', emails),

@@ -1,13 +1,14 @@
 {
   "name": "team-notice-app",
-  "version": "0.39.13",
+  "version": "0.39.14",
   "description": "일정과 기록, 영업 정산을 담는 개인 다이어리",
   "main": "main.js",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win",
-    "publish": "electron-builder --win --publish always",
+    "build:desktop-helper": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-desktop-foreground.ps1",
+    "dist": "npm run build:desktop-helper && electron-builder --win",
+    "publish": "npm run build:desktop-helper && electron-builder --win --publish always",
     "test": "node --test tests/calendar-refresh.test.js tests/calendar-responsive.test.js tests/journal-entry.test.js tests/journal-render.test.js tests/journal-worlds.test.js tests/night-theme-picker.test.js tests/night-theme.test.js tests/ui-refinements.test.js",
     "test:ui": "node tests/storybook-ui.cjs",
     "test:ui:nature": "node tests/storybook-nature-ui.cjs",
@@ -47,6 +48,10 @@
       {
         "from": "artifacts/public-release-config",
         "to": "config"
+      },
+      {
+        "from": "build/desktop-foreground.exe",
+        "to": "desktop-foreground.exe"
       }
     ],
     "publish": {

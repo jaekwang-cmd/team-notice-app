@@ -73,8 +73,13 @@ const { createPreviewServer } = require('../scripts/premium-preview.cjs');
     for (const theme of themeIds) {
       await page.locator('#journal-theme-select').selectOption(theme);
       await page.waitForFunction(theme => document.body.dataset.storyTheme === theme, theme);
-      for (let scene=0;scene<3;scene++) {
-        await page.locator(`[data-world-scene="${scene}"]`).click();
+      assert.equal(await page.locator('.world-controls').isVisible(), false);
+      for (const [scene,view] of ['journal','calendar','memo'].entries()) {
+        await page.locator(`.sidebar-nav-btn[data-view="${view}"]`).click();
+        await page.waitForFunction(({scene,view}) => {
+          const world = document.querySelector('#journal-world');
+          return world.dataset.scene === String(scene) && world.dataset.view === view;
+        }, {scene,view});
         await page.waitForTimeout(560);
         const painted = await page.locator('.world-landscape').evaluate(c => {
           const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;

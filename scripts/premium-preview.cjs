@@ -39,6 +39,13 @@ function previewBootstrap(appVersion) {
   for (let i = 0; i < 5; i++) store.events.push({ id: `busy-${i}`, title: ['오전 고객 상담', '계약 초안 검토', '점심 산책', '새로운 프로젝트 메모', '오늘의 회고'][i], start: `${day(0)}T${pad(9 + i * 2)}:30:00+09:00`, end: `${day(0)}T${pad(10 + i * 2)}:00:00+09:00`, allDay: false, colorId: String(i + 2) });
   store.events.push({ id: 'span-1', title: '브랜드 리서치 · 집중 주간', start: day(2), end: day(5), allDay: true, colorId: '3' });
   const listeners = new Map();
+  const taskDays = new Map();
+  let taskRevision = 0;
+  function taskSnapshot() {
+    const scope = store.signedIn ? 'user:' + user.uid : 'device';
+    return {scope, rev:taskRevision, days:copy(taskDays.get(scope) || {}),
+      sync:store.signedIn ? 'synced' : 'device', pendingCount:0, canEdit:true};
+  }
   const failures = new Set();
   const sourceFor = { onMemosUpdate: 'memos', onChulgoUpdate: 'ledger', onReminderUpdate: 'reminders' };
   function emit(channel, value) { for (const cb of listeners.get(channel) || []) cb(copy(value)); }
@@ -54,8 +61,16 @@ function previewBootstrap(appVersion) {
     getWhatsNew: async () => null, getUpdateStatus: async () => ({ state: 'idle' }), checkForUpdates: async () => ({ reason: 'dev' }),
     getTheme: async () => copy({ ...THEME_PRESETS[store.theme.mode], ...store.theme }), setTheme: async theme => { store.theme = copy(theme); sessionStorage.setItem('storybook_fixture_theme', JSON.stringify(store.theme)); },
     googleIsSignedIn: async () => store.signedIn, getCurrentUser: async () => store.signedIn ? copy(user) : { signedIn: false, uid: null, isAdmin: false },
-    googleSignIn: async () => { store.signedIn = true; emit('onAuthUpdated', user); return copy(user); },
-    googleSignOut: async () => { store.signedIn = false; emit('onAuthUpdated', { signedIn: false, uid: null, isAdmin: false }); },
+    googleSignIn: async () => { store.signedIn = true; taskRevision++; emit('onSimpleTasks',taskSnapshot()); emit('onAuthUpdated', user); return copy(user); },
+    googleSignOut: async () => { store.signedIn = false; taskRevision++; emit('onSimpleTasks',taskSnapshot()); emit('onAuthUpdated', { signedIn: false, uid: null, isAdmin: false }); },
+    openSimpleWidget: async () => ({mode:'top'}),
+    readSimpleTasks: async () => taskSnapshot(),
+    mutateSimpleTask: async ({scope,op}) => {
+      if (taskSnapshot().scope !== scope) throw Error('계정이 변경되었습니다.');
+      taskDays.set(scope, window.simpleTaskData.change(taskDays.get(scope) || {},op));
+      taskRevision++;
+      return taskSnapshot();
+    },
     getHolidays: async () => [], getShortcutLinks: async () => [], getAutostart: async () => false, getPreferredBrowser: async () => 'default',
     getWindowSize: async () => ({ width: innerWidth, height: innerHeight }), setWindowSize: async size => size,
     getChulgoPosition: async () => '팀장', getChulgoPhone: async () => '', getRetentionCount: async () => 0,
@@ -99,21 +114,22 @@ function createPreviewServer() {
   return http.createServer((req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'self'; base-uri 'none'; form-action 'none'");
     if (url.pathname === '/__fixture/health') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ fixture: 'premium-calendar', memoryOnly: true })); }
     if (url.pathname === '/__fixture/bootstrap.js') { res.setHeader('Content-Type', 'text/javascript; charset=utf-8'); const version = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8')).version; return res.end(`(${previewBootstrap.toString()})(${JSON.stringify(version)});`); }
     if (url.pathname === '/' || url.pathname === '/index.html') {
       let html = fs.readFileSync(path.join(rendererRoot, 'index.html'), 'utf8');
-      html = html.replace(/<link\b[^>]*href="https?:[^>]+>/g, '').replace('<head>', '<head><script src="/__fixture/bootstrap.js"></script>').replace('<title>여백</title>', '<title>여백 · 아홉 가지 풍경 미리보기</title>');
+      html = html.replace(/<link\b[^>]*href="https?:[^>]+>/g, '').replace('<head>', '<head><script src="/simple/task-data.js"></script><script src="/__fixture/bootstrap.js"></script>').replace('<title>여백</title>', '<title>여백 · 아홉 가지 풍경 미리보기</title>');
       res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(html);
     }
     const name = decodeURIComponent(url.pathname.slice(1));
     const staticFile = /^[a-zA-Z0-9_-]+\.(?:css|js|svg|png|woff2?)$/.test(name);
     const premiumFont = /^(?:premium-fonts|story-fonts)\/[a-z0-9-]+\.woff2$/.test(name);
-    if (!staticFile && !premiumFont) { res.statusCode = 404; return res.end(); }
+    const simpleFile = /^simple\/[a-z-]+\.(?:html|js|css)$/.test(name);
+    if (!staticFile && !premiumFont && !simpleFile) { res.statusCode = 404; return res.end(); }
     const target = path.resolve(rendererRoot, name);
     if (!target.startsWith(rendererRoot + path.sep) || !fs.existsSync(target)) { res.statusCode = 404; return res.end(); }
-    const type = { '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.woff': 'font/woff' }[path.extname(name)];
+    const type = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.woff': 'font/woff' }[path.extname(name)];
     res.setHeader('Content-Type', `${type}; charset=utf-8`); fs.createReadStream(target).pipe(res);
   });
 }

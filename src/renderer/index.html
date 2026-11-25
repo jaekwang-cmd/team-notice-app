@@ -85,6 +85,12 @@
       <span class="app-title">여백</span>
       <button id="app-version-badge" class="app-version-badge" title="클릭해서 업데이트 확인">v...</button>
       <div class="titlebar-shortcuts" id="titlebar-shortcuts"></div>
+      <button type="button" id="simple-google-button" disabled>Google 연결</button>
+      <button type="button" id="open-daily-widget">☑ 할 일</button>
+      <div id="mode-switch" role="group" aria-label="화면 모드">
+        <button type="button" data-mode="classic" aria-pressed="true">기본모드</button>
+        <button type="button" data-mode="simple" aria-pressed="false">간편모드</button>
+      </div>
       <label class="journal-theme-picker">테마 <select id="journal-theme-select" aria-label="다이어리 테마"></select></label>
       <div class="window-controls">
         <button id="btn-pin" title="창 위치 고정 (이동 잠금)">📌</button>
@@ -94,6 +100,7 @@
       </div>
     </div>
 
+    <iframe id="simple-pane" title="간편모드 할 일과 월간 다이어리"></iframe>
     <div id="config-banner" class="config-banner hidden">
       ⚠️ Firebase / Google 설정이 필요합니다. <code>config/config.json</code>을 채워주세요. (README 참고)
     </div>
@@ -663,7 +670,7 @@
       <h4>계정 삭제</h4>
       <p class="chulgo-mini-hint">
         <strong id="account-delete-email"></strong> 계정을 삭제합니다. 로그인 정보와 개인
-        식별 정보는 삭제되고, 출고/정산 기록은 세무·회계 보존 목적으로 회사 자료로 남습니다.
+        식별 정보, 이 계정의 간편모드 할 일이 삭제됩니다. 출고/정산 기록은 세무·회계 보존 목적으로 회사 자료로 남습니다.
         이 작업은 되돌릴 수 없습니다.
       </p>
       <p class="chulgo-mini-hint">확인을 위해 아래에 <strong>삭제</strong>를 입력해주세요.</p>
@@ -1068,5 +1075,7 @@
   <link rel="stylesheet" href="readable-type.css">
   <link rel="stylesheet" href="desktop-comfort.css">
   <script src="desktop-comfort.js"></script>
+  <link rel="stylesheet" href="simple/shell.css">
+  <script src="simple/shell.js"></script>
 </body>
 </html>

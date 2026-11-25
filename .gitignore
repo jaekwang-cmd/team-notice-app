@@ -2,6 +2,7 @@ node_modules/
 config/config.json
 *.log
 dist/
+build/desktop-foreground.exe
 dist-storybook-preview/
 artifacts/
 playwright-report/

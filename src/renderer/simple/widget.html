@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'; object-src 'none'">
+  <title>여백 · 할 일 위젯</title>
+  <link rel="stylesheet" href="widget.css">
+  <script src="task-data.js" defer></script>
+  <script src="task-store.js" defer></script>
+  <script src="widget.js" defer></script>
+</head>
+<body>
+  <div id="widget">
+    <header>
+      <div class="topline">
+        <nav class="date-nav" aria-label="할 일 날짜">
+          <button type="button" class="icon-button" id="prev" title="이전 날짜" aria-label="이전 날짜"><i class="left arrow"></i></button>
+          <h1 id="date-title"></h1>
+          <button type="button" class="icon-button" id="next" title="다음 날짜" aria-label="다음 날짜"><i class="right arrow"></i></button>
+        </nav>
+        <button type="button" class="today" id="today" hidden>오늘</button>
+        <div class="window-actions">
+          <button type="button" class="icon-button gear" id="settings" title="위젯 설정" aria-label="위젯 설정">⚙</button>
+          <button type="button" class="icon-button" id="close" title="위젯 닫기" aria-label="위젯 닫기"><i class="cross"></i></button>
+        </div>
+      </div>
+      <div class="summary"><span id="remaining"></span><span id="filter-name" hidden></span><span id="task-sync" role="status"></span></div>
+      <div class="hover-track" hidden aria-hidden="true"><i></i></div>
+    </header>
+    <main id="task-list" aria-label="할 일 목록"></main>
+    <div id="toast" role="status" hidden><span id="toast-text"></span><button id="undo" type="button" hidden>되돌리기</button></div>
+    <footer>
+      <form id="add-form" autocomplete="off">
+        <span aria-hidden="true" class="plus">+</span>
+        <input id="task-input" aria-label="할 일 추가" placeholder="할 일 추가" type="text" maxlength="2000" required>
+        <button id="submit" type="submit">추가</button>
+      </form>
+    </footer>
+  </div>
+</body>
+</html>

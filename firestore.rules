@@ -26,6 +26,24 @@ service cloud.firestore {
       return myOrgExists() ? myOrgDoc().permission : 'member';
     }
 
+    // 간편모드의 개인 할 일. 경로의 UID는 Firebase 로그인 계정이며 생성 시각은 기기에서 기록한 밀리초다.
+    match /users/{uid}/simpleTasks/{taskId} {
+      function ownsList() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+      function validTask(data) {
+        return data.keys().hasAll(['day', 'title', 'done', 'createdAt'])
+          && data.keys().hasOnly(['day', 'title', 'done', 'createdAt'])
+          && data.day is string && data.day.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+          && data.title is string && data.title.size() > 0 && data.title.size() <= 2000
+          && data.done is bool && data.createdAt is int && data.createdAt >= 0;
+      }
+      allow read, delete: if ownsList();
+      allow create: if ownsList() && validTask(request.resource.data);
+      allow update: if ownsList() && validTask(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done']);
+    }
+
     // 개인 메모: 본인이 쓴 문서만 읽기/쓰기 가능 (다른 팀원에게 공유되지 않음)
     match /memos/{docId} {
       allow read, delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
