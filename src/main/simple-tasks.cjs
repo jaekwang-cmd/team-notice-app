@@ -44,9 +44,9 @@ module.exports = function registerTasks(getWindows, identity, getDb) {
         return runTransaction(db,async transaction=>{
           const existing=await transaction.get(ref);
           if (!isCurrent()) throw Error('계정이 바뀌었어요.');
-          if (op.kind === 'setDone') {
+          if (op.kind === 'setDone' || op.kind === 'edit') {
             if (!existing.exists()) return {kind:'remove',id:op.id,day:op.day};
-            transaction.update(ref,{done:op.done});
+            transaction.update(ref,op.kind === 'edit' ? {title:op.title} : {done:op.done});
             return op;
           }
           if (existing.exists()) {

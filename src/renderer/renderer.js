@@ -58,8 +58,11 @@ function startOfGrid(year, month) {
 
 async function getHolidays(year) {
   if (!holidaysCache.has(year)) {
-    const holidays = await window.api.getHolidays(year);
-    holidaysCache.set(year, holidays);
+    const request = window.api.getHolidays(year).catch(error => {
+      holidaysCache.delete(year);
+      throw error;
+    });
+    holidaysCache.set(year, request);
   }
   return holidaysCache.get(year);
 }
@@ -278,7 +281,7 @@ function buildCalendarGrid() {
         const bar = document.createElement('div');
         bar.className = 'event-banner-segment';
         bar.title = seg.event.title;
-        const color = EVENT_COLOR_BY_ID.get(seg.event.colorId);
+        const color = EVENT_COLOR_BY_ID.get(String(seg.event.colorId));
         bar.style.background = color ? color.hex : 'var(--color-event-bg)';
         bar.style.color = color ? '#3a3a3a' : 'var(--color-event-text)';
         bar.style.top = `${metrics.topOffset + seg.track * (metrics.bannerHeight + EVENT_BANNER_GAP)}px`;
@@ -305,7 +308,7 @@ function buildCalendarGrid() {
         line.className = 'event-line';
         line.textContent = ev.title;
         line.title = ev.title;
-        const color = EVENT_COLOR_BY_ID.get(ev.colorId);
+        const color = EVENT_COLOR_BY_ID.get(String(ev.colorId));
         if (color) {
           line.style.background = color.hex;
           line.style.borderColor = color.hex;
@@ -783,7 +786,24 @@ function formatEventTime(ev) {
   return `${fmt(start)} - ${fmt(end)}`;
 }
 
+function calendarClock(value) {
+  const date = new Date(value);
+  return pad(date.getHours()) + ':' + pad(date.getMinutes());
+}
+
+function calendarEventKey(ev) {
+  return ev.teamEventId ? 'team:' + ev.teamEventId : 'event:' + ev.id;
+}
+
+function canManageCalendarEvent(ev) {
+  return isGoogleSignedIn && (ev.teamEventId ? currentUser.isAdmin : Boolean(ev.id));
+}
+
 function renderDayEventList() {
+  const active = document.activeElement;
+  const focusedRow = dayEventList.contains(active) ? active.closest('.day-event-item') : null;
+  const focusedKey = focusedRow?.dataset.eventKey;
+  const focusedAction = focusedRow && active.dataset.action;
   dayEventList.innerHTML = '';
   const events = window.simpleMode?.detail.open ? window.simpleMode.onDay(selectedDateStr) : eventsByDate.get(selectedDateStr) || [];
 
@@ -798,8 +818,11 @@ function renderDayEventList() {
   events.forEach((ev) => {
     const item = document.createElement('div');
     item.className = 'day-event-item';
-    const color = EVENT_COLOR_BY_ID.get(ev.colorId);
-    if (color) item.style.borderLeft = `4px solid ${color.hex}`;
+    item.dataset.eventKey = calendarEventKey(ev);
+    item.tabIndex = -1;
+    const color = EVENT_COLOR_BY_ID.get(String(ev.colorId));
+    if (window.simpleMode?.detail.open) item.style.backgroundColor = color?.hex || '#d9ebe4';
+    else if (color) item.style.borderLeft = `4px solid ${color.hex}`;
 
     const title = document.createElement('div');
     title.className = 'event-title';
@@ -816,17 +839,17 @@ function renderDayEventList() {
       item.appendChild(badge);
     }
 
-    const canManageEvent = ev.teamEventId ? currentUser.isAdmin : true;
-
-    if (canManageEvent) {
+    if (canManageCalendarEvent(ev)) {
       const actions = document.createElement('div');
       actions.className = 'event-actions';
 
       const editBtn = document.createElement('button');
+      editBtn.dataset.action = 'edit';
       editBtn.textContent = '수정';
       editBtn.onclick = () => showEventForm(ev);
 
       const delBtn = document.createElement('button');
+      delBtn.dataset.action = 'delete';
       delBtn.textContent = '삭제';
       const deletionAccount = currentUser.uid;
       delBtn.onclick = async () => {
@@ -836,6 +859,7 @@ function renderDayEventList() {
         if (!(await confirmCalendarAction(msg))) return;
         try {
           if (!isGoogleSignedIn || deletionAccount !== currentUser.uid) throw Error('로그인 계정이 바뀌었어요. 일정을 다시 열어 주세요.');
+          if (!canManageCalendarEvent(ev)) throw Error('이 일정은 조회만 할 수 있어요.');
           if (ev.teamEventId) {
             await window.api.deleteTeamEvent(ev.teamEventId);
           } else {
@@ -859,10 +883,15 @@ function renderDayEventList() {
     }
 
     dayEventList.appendChild(item);
+    if (focusedKey === item.dataset.eventKey) {
+      const control = [...item.querySelectorAll('button')].find(button => button.dataset.action === focusedAction);
+      (control || item).focus({preventScroll:true});
+    }
   });
 }
 
 function showEventForm(ev) {
+  if (ev && !canManageCalendarEvent(ev)) return;
   const revision = ++eventFormRevision;
   editingSimpleEvent = window.simpleMode?.detail.open ? ev : null;
   editingAccount = currentUser.uid;
@@ -879,12 +908,8 @@ function showEventForm(ev) {
   if (ev) {
     eventTitleInput.value = ev.title;
     eventAlldayCheckbox.checked = ev.allDay;
-    if (!ev.allDay) {
-      const start = new Date(ev.start);
-      const end = new Date(ev.end);
-      eventStartTime.value = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
-      eventEndTime.value = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
-    }
+    eventStartTime.value = ev.allDay ? '09:00' : calendarClock(ev.start);
+    eventEndTime.value = ev.allDay ? '10:00' : calendarClock(ev.end);
   } else {
     eventTitleInput.value = '';
     eventAlldayCheckbox.checked = true;
@@ -934,16 +959,22 @@ eventCancelBtn.onclick = hideEventForm;
 
 function buildEventTimesFromForm() {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  if (eventAlldayCheckbox.checked) {
-    if (editingSimpleEvent?.allDay) return { start: {date: editingSimpleEvent.start}, end: {date: editingSimpleEvent.end} };
-    return { start: { date: selectedDateStr }, end: { date: addDaysStr(selectedDateStr, 1) } };
+  const ev = editingSimpleEvent;
+  let firstDay = selectedDateStr;
+  let lastDay = selectedDateStr;
+  if (ev) {
+    firstDay = ev.allDay ? ev.start : toDateStr(new Date(ev.start));
+    // Both kinds of events end exclusively; midnight belongs to the preceding day.
+    lastDay = ev.allDay ? addDaysStr(ev.end,-1) : toDateStr(new Date(Math.max(Date.parse(ev.start), Date.parse(ev.end)-1)));
   }
-  const timed = editingSimpleEvent && !editingSimpleEvent.allDay;
-  const startsOn = timed ? toDateStr(new Date(editingSimpleEvent.start)) : selectedDateStr;
-  const endsOn = timed ? toDateStr(new Date(editingSimpleEvent.end)) : selectedDateStr;
+  if (eventAlldayCheckbox.checked) {
+    return { start: { date: firstDay }, end: { date: addDaysStr(lastDay, 1) } };
+  }
+  const timed = ev && !ev.allDay;
+  const endDay = timed ? toDateStr(new Date(ev.end)) : lastDay;
   return {
-    start: { dateTime: `${startsOn}T${eventStartTime.value}:00`, timeZone },
-    end: { dateTime: `${endsOn}T${eventEndTime.value}:00`, timeZone },
+    start: { dateTime: timed && calendarClock(ev.start) === eventStartTime.value ? ev.start : `${firstDay}T${eventStartTime.value}:00`, timeZone },
+    end: { dateTime: timed && calendarClock(ev.end) === eventEndTime.value ? ev.end : `${endDay}T${eventEndTime.value}:00`, timeZone },
   };
 }
 
@@ -963,6 +994,7 @@ eventForm.addEventListener('submit', async (e) => {
   saveBtn.disabled = true;
   try {
     if (!isGoogleSignedIn || editingAccount !== currentUser.uid) throw Error('로그인 계정이 바뀌었어요. 일정을 다시 열어 주세요.');
+    if ((editingTeamEventId || asTeamEvent) && !currentUser.isAdmin) throw Error('팀 일정을 변경할 권한이 없어요.');
     if (editingTeamEventId) {
       await window.api.updateTeamEvent({
         id: editingTeamEventId,
@@ -1032,12 +1064,15 @@ async function refreshEventsAndDayPanel() {
   if (selectedDateStr) renderDayEventList();
 }
 
-function openDayPanel(dateStr) {
+function setDayPanelTitle(dateStr, holidayName) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  dayPanelTitle.textContent = holidayName ? `${y}년 ${m}월 ${d}일 (${holidayName})` : `${y}년 ${m}월 ${d}일`;
+}
+
+function openDayPanel(dateStr, holidayName = currentHolidayMap.get(dateStr)) {
   selectedDateStr = dateStr;
   hideEventForm();
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const holidayName = currentHolidayMap.get(dateStr);
-  dayPanelTitle.textContent = holidayName ? `${y}년 ${m}월 ${d}일 (${holidayName})` : `${y}년 ${m}월 ${d}일`;
+  setDayPanelTitle(dateStr, holidayName);
 
   if (!isGoogleSignedIn) {
     dayEventList.innerHTML = '<div class="day-event-empty">구글 로그인 후 일정을 볼 수 있어요.</div>';
@@ -1683,6 +1718,7 @@ function fillThemeInputs(theme) {
     if (el) el.value = theme[f.key] || defaults[f.key];
   });
   themeFontSelect.value = theme.font || '';
+  window.fontPicker?.sync(themeFontSelect);
   if (themeUiFontScaleSelect) themeUiFontScaleSelect.value = theme.uiFontScale || '100';
   themeDateFontSizeSelect.value = theme.dateFontSize || defaults.dateFontSize;
   themeEventFontSizeSelect.value = theme.eventFontSize || defaults.eventFontSize;

@@ -19,6 +19,14 @@
   let tasksReady = false;
   let toastTimer;
   let midnightTimer;
+  const marker = window.simpleMarkers.attach(input,el('marker-controls'));
+  function currentDraft() {
+    return {value:input.value,highlights:marker.read(),pendingColor:marker.pendingColor()};
+  }
+  function loadDraft(draft) {
+    input.value = draft?.value || '';
+    marker.reset(draft?.highlights,draft?.pendingColor);
+  }
   function localKey(date) {
     return [date.getFullYear(), String(date.getMonth() + 1).padStart(2,'0'), String(date.getDate()).padStart(2,'0')].join('-');
   }
@@ -60,12 +68,13 @@
   }
   function selectDate(key) {
     if (typeof key !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
-    if (input.value) drafts.set(selected, input.value);
+    if (input.value || marker.pendingColor()) drafts.set(selected,currentDraft());
     else drafts.delete(selected);
+    if (selected !== key) window.simpleMarkers.closeEditor();
     selected = key;
     followsToday = selected === today;
     afterMidnight = false;
-    input.value = drafts.get(key) || '';
+    loadDraft(drafts.get(key));
     list.scrollTop = 0;
     renderList();
   }
@@ -94,9 +103,10 @@
     check.type = 'checkbox';
     check.id = 'widget-task-' + task.id;
     check.checked = task.done;
+    check.disabled = !tasks.status().canEdit;
     const title = document.createElement('span');
     title.className = 'task-title';
-    title.textContent = task.title;
+    window.simpleMarkers.render(title,task.title,task.highlights);
     label.append(check, title);
     check.onchange = async () => {
       try { await tasks.setDone(key, task.id, check.checked); }
@@ -106,6 +116,7 @@
     del.type = 'button';
     del.className = 'icon-button remove';
     del.title = '삭제';
+    del.disabled = !tasks.status().canEdit;
     del.setAttribute('aria-label', task.title + ' 삭제');
     const icon = document.createElement('i');
     icon.className = 'cross';
@@ -120,7 +131,22 @@
         notify('할 일을 삭제했어요.', () => tasks.restore(key, task, index));
       } catch { notify('할 일을 삭제하지 못했어요.'); }
     };
-    row.append(label, del);
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'icon-button marker-edit';
+    edit.id = 'widget-marker-' + task.id;
+    edit.textContent = '수정';
+    edit.title = '할 일 수정';
+    edit.setAttribute('aria-label',task.title + ' 수정');
+    edit.disabled = !tasks.status().canEdit;
+    edit.onclick = () => {
+      const scope = tasks.status().scope;
+      window.simpleMarkers.edit(edit,task,async (title,ranges) => {
+        if (scope !== tasks.status().scope) return;
+        await tasks.edit(key,task,title,ranges);
+      });
+    };
+    row.append(label,edit,del);
     return row;
   }
   function renderList() {
@@ -128,6 +154,7 @@
     const status = tasks.status();
     input.disabled = !status.canEdit;
     el('submit').disabled = !status.canEdit;
+    el('marker-controls').querySelector('.marker-trigger').disabled = !status.canEdit;
     el('task-sync').textContent = ({
       connecting:'계정 연결 중', pending:'동기화 중', offline:status.pendingCount ? '오프라인 · 전송 대기' : '오프라인', error:'동기화 재시도 중'
     })[status.sync] || '';
@@ -166,7 +193,7 @@
   el('settings').onclick = () => native.openSettings().catch(() => notify('위젯 설정을 열지 못했어요.'));
   el('close').onclick = () => native.close();
   const updateDraft = () => {
-    if (input.value) drafts.set(selected, input.value);
+    if (input.value) drafts.set(selected,currentDraft());
     else { drafts.delete(selected); if (afterMidnight && !composing) selectDate(today); }
   };
   input.addEventListener('input', updateDraft);
@@ -186,10 +213,12 @@
     if (!tasksReady || !tasks.status().canEdit || composing || committingWithEnter || !title) return;
     const scope = tasks.status().scope;
     const key = selected;
-    input.value = '';
+    const draft = currentDraft();
+    const highlights = marker.readTrimmed();
+    loadDraft();
     drafts.delete(key);
     try {
-      await tasks.add(key, title);
+      await tasks.add(key,title,{highlights});
       if (tasks.status().scope !== scope) return;
       if (selected === key && !input.value) {
         if (afterMidnight) selectDate(today);
@@ -197,8 +226,8 @@
       }
     } catch {
       if (tasks.status().scope !== scope) return;
-      if (selected === key && !input.value) input.value = value;
-      else if (selected !== key && !drafts.has(key)) drafts.set(key, value);
+      if (selected === key && !input.value && !marker.pendingColor()) loadDraft(draft);
+      else if (selected !== key && !drafts.has(key)) drafts.set(key,draft);
       notify('할 일을 저장하지 못했어요.');
     }
   };
@@ -225,7 +254,8 @@
   input.disabled = true;
   tasks.subscribe(source => {
     if (source === 'scope') {
-      drafts.clear(); input.value = ''; composing = false;
+      drafts.clear(); loadDraft(); composing = false;
+      window.simpleMarkers.closeEditor();
       clearTimeout(toastTimer); el('toast').hidden = true; el('undo').onclick = null;
     }
     if (tasksReady) renderList();

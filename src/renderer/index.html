@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="journal-worlds.css" />
   <link rel="stylesheet" href="storybook.css" />
   <link rel="stylesheet" href="story-fonts.css" />
+  <link rel="stylesheet" href="font-previews/fonts.css" />
   <link rel="stylesheet" href="storybook-shell.css" />
   <link rel="stylesheet" href="storybook-pages.css" />
   <link rel="stylesheet" href="storybook-workspace.css" />
@@ -86,6 +87,17 @@
       <button id="app-version-badge" class="app-version-badge" title="클릭해서 업데이트 확인">v...</button>
       <div class="titlebar-shortcuts" id="titlebar-shortcuts"></div>
       <button type="button" id="simple-google-button" disabled>Google 연결</button>
+      <label id="simple-design-picker">디자인
+        <select id="simple-design" aria-label="간편모드 디자인">
+          <option value="mint">민트</option>
+          <option value="paper">종이</option>
+          <option value="blue">블루</option>
+          <option value="lavender">라벤더</option>
+          <option value="apricot">살구</option>
+          <option value="graphite">그라파이트</option>
+        </select>
+      </label>
+      <button type="button" id="simple-type-button" popovertarget="simple-type-panel" aria-label="간편모드 글자 설정">글자</button>
       <button type="button" id="open-daily-widget">☑ 할 일</button>
       <div id="mode-switch" role="group" aria-label="화면 모드">
         <button type="button" data-mode="classic" aria-pressed="true">기본모드</button>
@@ -555,8 +567,8 @@
         </div>
       </details>
 
-      <div class="theme-row">
-        <span>글씨체</span>
+      <div class="theme-row type-guide">
+        <label for="theme-font">글씨체</label>
         <select id="theme-font">
           <option value="">기본 (Pretendard)</option>
           <option value="'Noto Sans KR', 'Pretendard Variable', 'Malgun Gothic', sans-serif">Noto Sans KR</option>
@@ -571,7 +583,7 @@
       <div class="theme-row theme-font-preview-row">
         <span id="theme-font-preview">오늘의 기록, 나의 다이어리<br>가나다라마바사 ABC 123,456원</span>
       </div>
-      <div class="theme-row">
+      <div class="theme-row type-guide">
         <label for="theme-ui-font-scale">메뉴·본문 글씨 크기</label>
         <select id="theme-ui-font-scale">
           <option value="100">100% · 기본</option><option value="110">110%</option>
@@ -579,9 +591,9 @@
           <option value="160">160%</option><option value="180">180%</option><option value="200">200%</option>
         </select>
       </div>
-      <p class="theme-reading-hint">메뉴·풍경 버튼·메모·안내 글씨를 함께 키웁니다. 날짜와 일정 크기는 아래에서 따로 조절하세요.</p>
-      <div class="theme-row">
-        <span>날짜 숫자 크기</span>
+      <p class="theme-reading-hint type-guide">메뉴·풍경 버튼·메모·안내 글씨를 함께 키웁니다. 날짜와 일정 크기는 아래에서 따로 조절하세요.</p>
+      <div class="theme-row type-guide">
+        <label for="theme-date-font-size">날짜 숫자 크기</label>
         <select id="theme-date-font-size">
           <option value="10">10px</option>
           <option value="11">11px</option>
@@ -599,8 +611,8 @@
           <option value="30">30px</option>
         </select>
       </div>
-      <div class="theme-row">
-        <span>일정 글씨 크기</span>
+      <div class="theme-row type-guide">
+        <label for="theme-event-font-size">일정 글씨 크기</label>
         <select id="theme-event-font-size">
           <option value="8">8px</option>
           <option value="9">9px</option>
@@ -1060,6 +1072,7 @@
     </div>
   </div>
 
+  <script src="font-picker.js"></script>
   <script src="fonts.js"></script>
   <script src="theme.js"></script>
   <script src="storybook-themes.js"></script>
@@ -1076,6 +1089,27 @@
   <link rel="stylesheet" href="desktop-comfort.css">
   <script src="desktop-comfort.js"></script>
   <link rel="stylesheet" href="simple/shell.css">
+  <link rel="stylesheet" href="simple/design-palette.css">
+  <link rel="stylesheet" href="simple/type-shell.css">
+  <link rel="stylesheet" href="font-picker.css">
+  <section popover="auto" id="simple-type-panel" class="type-guide" aria-labelledby="simple-type-title">
+    <header><h2 id="simple-type-title">글자 설정</h2><button type="button" popovertarget="simple-type-panel" popovertargetaction="hide" aria-label="글자 설정 닫기">×</button></header>
+    <div class="font-picker-setting"><label for="simple-type-family">글꼴</label><select id="simple-type-family">
+      <option value="">디자인 기본</option>
+      <option value="story">고운바탕 · 다이어리</option>
+      <option value="malgun">맑은 고딕</option>
+      <option value="dotum">돋움</option>
+      <option value="batang">바탕</option>
+    </select></div>
+    <label>굵기<select id="simple-type-weight">
+      <option value="">디자인 기본</option><option value="400">보통</option><option value="500">중간</option><option value="600">약간 굵게</option><option value="700">굵게</option><option value="800">아주 굵게</option>
+    </select></label>
+    <label>크기<select id="simple-type-scale">
+      <option value="90">90%</option><option value="100" selected>100%</option><option value="110">110%</option><option value="125">125%</option><option value="140">140%</option><option value="160">160%</option><option value="180">180%</option><option value="200">200%</option>
+    </select></label>
+    <p id="simple-type-preview" aria-label="글꼴 미리보기">오늘의 기록, 나의 다이어리<br>가나다라마바사 ABC 123,456원</p>
+  </section>
   <script src="simple/shell.js"></script>
+  <script src="simple/typography.js"></script>
 </body>
 </html>

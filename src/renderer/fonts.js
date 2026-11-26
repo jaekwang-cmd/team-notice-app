@@ -29,6 +29,11 @@
     link.onerror = () => { requested.delete(font.family); link.remove(); };
     document.head.appendChild(link);
   }
+  const previewFamilies = new Set(['Pretendard', 'IBM Plex Sans KR', 'Noto Sans KR', ...fonts.map(font => font.family)]);
+  function previewStack(stack) {
+    const family = stack.split(',')[0].trim().replace(/^['"]|['"]$/g, '');
+    return previewFamilies.has(family) ? `'Yeobaek Preview ${family}', ${stack}` : stack;
+  }
   const picker = document.getElementById('theme-font');
   if (picker) {
     const groups = new Map();
@@ -41,6 +46,10 @@
       option.textContent = font.label;
       groups.get(font.group).appendChild(option);
     });
+    window.fontPicker?.install(picker, value => previewStack(value || "'Pretendard', 'Pretendard Variable', 'Malgun Gothic', sans-serif"));
   }
-  window.appFonts = { ensureLoaded };
+  window.appFonts = { ensureLoaded, previewStack, choices: fonts.map(font => ({
+    family: font.family, label: font.label, group: font.group,
+    stack: `'${font.family}', 'Malgun Gothic', ${font.fallback}`
+  })) };
 })();

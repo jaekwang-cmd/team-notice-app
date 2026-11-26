@@ -15,8 +15,24 @@
   close.setAttribute('aria-label','날짜 상세 닫기');
   const send = data => frame.contentWindow?.postMessage(data, '*');
   const modeKey = 'yeobaek.desktop.mode.v1';
+  const designKey = 'yeobaek.desktop.simpleDesign.v1';
+  const design = document.getElementById('simple-design');
+  try {
+    const saved = localStorage.getItem(designKey);
+    if ([...design.options].some(option => option.value === saved)) design.value = saved;
+  } catch {}
+  function applyDesign() {
+    document.body.dataset.simpleDesign = design.value;
+    send({type:'simple-design', value:design.value});
+  }
+  design.addEventListener('change', () => {
+    try { localStorage.setItem(designKey, design.value); } catch {}
+    applyDesign();
+  });
   let selectedPage = 'day';
   let range;
+  let holidayNames = {};
+  let holidayRange;
   let cachedEvents = [];
   let status = '';
   let failed = false;
@@ -44,14 +60,36 @@
       if (events.length) days[key] = events.map(ev => {
         const start = new Date(ev.start);
         const time = !ev.allDay && toDateStr(start) === key ? start.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit',hourCycle:'h23'}) + ' ' : '';
-        return {label: time + ev.title, color: EVENT_COLOR_BY_ID.get(ev.colorId)?.hex};
+        return {id:calendarEventKey(ev), editable:canManageCalendarEvent(ev),
+          label:time + ev.title, color:EVENT_COLOR_BY_ID.get(String(ev.colorId))?.hex};
       });
     }
-    send({type:'simple-calendar-events', ...range, days, statusText:status, retryAvailable:failed});
+    send({type:'simple-calendar-events', ...range, days, holidays:holidayNames, statusText:status, retryAvailable:failed});
     if (detail.open && selectedDateStr && isGoogleSignedIn) renderDayEventList();
+  }
+  async function loadMonthHolidays(requested) {
+    if (holidayRange === requested) return;
+    holidayRange = requested;
+    const firstYear = Number(requested.first.slice(0,4));
+    const lastYear = Number(addDaysStr(requested.limit,-1).slice(0,4));
+    try {
+      const years = firstYear === lastYear ? [firstYear] : [firstYear,lastYear];
+      const entries = (await Promise.all(years.map(getHolidays))).flat();
+      if (range !== requested) return;
+      const names = {};
+      for (const {date,name} of entries) {
+        if (date >= requested.first && date < requested.limit) names[date] = names[date] ? names[date] + ' · ' + name : name;
+      }
+      holidayNames = names;
+      if (detail.open && selectedDateStr) setDayPanelTitle(selectedDateStr, names[selectedDateStr]);
+      paint();
+    } catch {
+      if (range === requested) holidayRange = null; // Retry on the next calendar refresh.
+    }
   }
   function alignMonth() {
     if (!range || !activeMonth()) return;
+    loadMonthHolidays(range);
     const middle = new Date(addDaysStr(range.first,14) + 'T12:00:00');
     viewYear = middle.getFullYear();
     viewMonth = middle.getMonth();
@@ -73,7 +111,7 @@
   }
   close.addEventListener('click', () => { if (detail.open) detail.close(); });
   detail.addEventListener('cancel', e => { e.preventDefault(); close.click(); });
-  detail.addEventListener('close', () => { originalPosition.after(dayPanel); send({type:'simple-calendar-closed'}); });
+  detail.addEventListener('close', () => { originalPosition.after(dayPanel); if (activeMonth()) send({type:'simple-calendar-closed'}); });
   const nav = [];
   let previous = document.querySelector('#app-sidebar .journal-brand');
   for (const [view,label,icon] of [['day','금일 할 일','☑'], ['month','월간 다이어리','▦']]) {
@@ -93,6 +131,8 @@
   function setMode(simple) {
     document.body.toggleAttribute('data-simple-mode', simple);
     if (simple && !frame.hasAttribute('src')) frame.src = 'simple/index.html';
+    if (simple) applyDesign();
+    else delete document.body.dataset.simpleDesign;
     if (!simple) closeDetail();
     if (simple && selectedPage === 'month') alignMonth();
     for (const b of modeButtons) b.setAttribute('aria-pressed', String((b.dataset.mode === 'simple') === simple));
@@ -154,21 +194,29 @@
     }
     if (data.type === 'simple-page' && ['day','month'].includes(data.view)) {
       selectedPage = data.view;
+      if (document.body.hasAttribute('data-simple-mode')) applyDesign();
       for (const b of nav) b.setAttribute('aria-pressed', String(b.dataset.simplePage === selectedPage));
     }
     if (data.type === 'simple-calendar-range' && validDay(data.first) && validDay(data.limit) &&
         data.limit > data.first && data.limit <= addDaysStr(data.first,42)) {
       selectedPage = 'month';
       if (range?.first === data.first && range.limit === data.limit) { paint(); return; }
-      range = {first:data.first,limit:data.limit}; cachedEvents = [];
+      range = {first:data.first,limit:data.limit}; cachedEvents = []; holidayNames = {};
       alignMonth();
     }
     if (data.type === 'simple-calendar-retry' && activeMonth()) alignMonth();
     if (data.type === 'simple-calendar-open' && activeMonth() && validDay(data.date) && range && data.date >= range.first && data.date < range.limit) {
+      if (detail.open) return;
       detail.append(dayPanel);
-      if (!detail.open) detail.showModal();
-      openDayPanel(data.date);
-      if (isGoogleSignedIn) showEventForm(null);
+      detail.showModal();
+      openDayPanel(data.date, holidayNames[data.date] || '');
+      if (!isGoogleSignedIn) return;
+      if (data.eventId !== undefined) {
+        const ev = onDay(data.date).find(item => calendarEventKey(item) === data.eventId);
+        if (!ev) { showToast('일정이 변경됐어요. 날짜 목록을 확인해 주세요.'); return; }
+        if (canManageCalendarEvent(ev)) showEventForm(ev);
+        else [...dayEventList.children].find(item => item.dataset.eventKey === data.eventId)?.focus();
+      } else if (!data.list) showEventForm(null);
     }
   });
   window.simpleMode = {receivedEvents, authChanged, onDay, detail};

@@ -3,15 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; base-uri 'none'; form-action 'none'">
   <title>여백 간편모드</title>
   <link rel="stylesheet" href="day.css">
   <link rel="stylesheet" href="month.css">
+  <link rel="stylesheet" href="design-palette.css">
+  <link rel="stylesheet" href="designs.css">
+  <link rel="stylesheet" href="../story-fonts.css">
+  <link rel="stylesheet" href="type-frame.css">
+  <link rel="stylesheet" href="markers.css">
   <script defer src="month.js"></script>
   <script defer src="task-data.js"></script>
   <script defer src="task-store.js"></script>
+  <script defer src="markers.js"></script>
   <script defer src="day.js"></script>
   <script defer src="frame.js"></script>
+  <script defer src="../fonts.js"></script>
+  <script defer src="typography.js"></script>
 </head>
 <body>
   <nav class="views" aria-label="화면 선택" hidden>

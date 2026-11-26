@@ -30,7 +30,8 @@
   --color-button-text: #ffffff;
   --color-secondary-button-bg: rgba(124, 140, 255, 0.25);
 
-  --font-family: 'Pretendard Variable', Pretendard, 'Segoe UI', 'Malgun Gothic', sans-serif;
+  --ui-guide-font: 'Pretendard Variable', Pretendard, 'Segoe UI', 'Malgun Gothic', sans-serif;
+  --font-family: var(--ui-guide-font);
   --calendar-date-font-size: 11px;
   --calendar-event-font-size: 9.5px;
 

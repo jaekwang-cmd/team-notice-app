@@ -1,6 +1,16 @@
 const Holidays = require('date-holidays');
 
 const hd = new Holidays('KR');
+// 설 연휴는 음력 1월 1일 전날부터 3일간이다. 설치된 KR 규칙은 설 당일부터 시작한다.
+hd.setHoliday('korean 01-0-01 P3D', false);
+hd.setHoliday('1 day before korean 01-0-01 P3D', {name: '설날', type: 'public'});
+hd.setHoliday('05-01 since 2026', {name: '노동절', type: 'public'});
+// 정부가 개별 지정한 날짜와 전국 선거일은 해마다 반복되지 않는다.
+for (const [day, name] of [
+  ['2024-04-10', '제22대 국회의원선거일'], ['2024-10-01', '국군의 날 임시공휴일'],
+  ['2025-01-27', '임시공휴일'], ['2025-06-03', '제21대 대통령선거일'],
+  ['2026-06-03', '제9회 전국동시지방선거일'],
+]) hd.setHoliday(day, {name, type: 'public'});
 
 const MS_DAY = 86400000;
 const KST_OFFSET_MS = 9 * 3600000;
@@ -40,19 +50,21 @@ function dayOfWeek(dateStr) {
   return new Date(toUTCms(dateStr)).getUTCDay(); // 0=일 ~ 6=토
 }
 
-// --- 대체공휴일 (「관공서의 공휴일에 관한 규정」 제3조, 2023.5.4. 개정 기준) ---
+// --- 대체공휴일 (「관공서의 공휴일에 관한 규정」 제3조) ---
 // - 토요일·일요일과 겹치면 대체: 삼일절·제헌절(2026년 공휴일 편입 이후)·광복절·개천절·
-//   한글날·어린이날·부처님오신날(석가탄신일)·기독탄신일
+//   한글날·어린이날·부처님오신날(석가탄신일)·기독탄신일·노동절
 // - 설날·추석 연휴는 토요일과 겹친 것만으로는 대체가 안 생기고, 일요일이나 다른
 //   공휴일과 겹칠 때만 생긴다
 // - 신정(1/1)·현충일(6/6)은 대체공휴일 대상이 아니다
 // - 대체공휴일 = 그 공휴일(연휴는 마지막 날) 다음의 첫 번째 비공휴일. 계산된 날이
 //   토요일이면 한 번 더 다음 비공휴일로 순연된다(일요일은 어차피 공휴일이라 자동으로 넘어감)
-// * 정부가 그때그때 국무회의로 지정하는 "임시공휴일"(예: 2025년 추석 연휴를 개천절·한글날과
-//   이어붙인 임시공휴일)은 법으로 정해진 고정 규칙이 아니라 이 계산식으로 예측할 수 없다.
-const WEEKEND_RULE_NAMES = new Set(['3·1절', '제헌절', '광복절', '개천절', '한글날', '어린이날', '석가탄신일', '기독탄신일']);
+const SUBSTITUTE_SINCE = new Map([
+  ['설날', '2013-11-05'], ['추석', '2013-11-05'], ['어린이날', '2013-11-05'],
+  ['3·1절', '2021-08-04'], ['광복절', '2021-08-04'], ['개천절', '2021-08-04'], ['한글날', '2021-08-04'],
+  ['석가탄신일', '2023-05-04'], ['기독탄신일', '2023-05-04'],
+  ['노동절', '2026-05-01'], ['제헌절', '2026-05-11'],
+]);
 const SUNDAY_RULE_NAMES = new Set(['설날', '추석']);
-const NO_SUBSTITUTE_NAMES = new Set(['신정', '현충일']);
 
 function computeSubstitutes(base) {
   // 이름별로 묶어서 "연휴" 단위(설날/추석은 3일, 나머지는 1일)의 period를 만든다.
@@ -99,7 +111,7 @@ function computeSubstitutes(base) {
 
   const substitutes = [];
   periods.forEach((p) => {
-    const substitutable = p.names.filter((n) => !NO_SUBSTITUTE_NAMES.has(n));
+    const substitutable = p.names.filter(n => SUBSTITUTE_SINCE.has(n) && p.days[0] >= SUBSTITUTE_SINCE.get(n));
     if (!substitutable.length) return;
 
     const crossHolidayOverlap = p.names.length > 1;

@@ -18,6 +18,8 @@ body #chulgo-panel .chulgo-ledger :is(input,select){height:auto;min-height:30px}
 body :is(.theme-row,.ledger-goal-counts,.chulgo-header,.chulgo-meta-row,.chulgo-action-row){flex-wrap:wrap;gap:8px}
 body .theme-row>select{max-width:100%;min-width:0}body .theme-row>label{flex-shrink:0}
 body #theme-font-preview{font-size:calc(20px * var(--ui-font-scale));line-height:1.7}
+/* Keep font names and settings legible while the sample and content change. */
+.type-guide, .type-guide :is(label, select, optgroup, option, h2, button) { font-family:var(--ui-guide-font); }
 .theme-reading-hint{margin:5px 0 18px;color:var(--color-text-secondary);font-size:var(--reading-caption)}
 body .settings-card{overflow:auto;max-height:90vh}
 body .memo-done-toggle{height:auto;white-space:normal}

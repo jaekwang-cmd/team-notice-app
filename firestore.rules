@@ -41,7 +41,7 @@ service cloud.firestore {
       allow read, delete: if ownsList();
       allow create: if ownsList() && validTask(request.resource.data);
       allow update: if ownsList() && validTask(request.resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'done']);
     }
 
     // 개인 메모: 본인이 쓴 문서만 읽기/쓰기 가능 (다른 팀원에게 공유되지 않음)

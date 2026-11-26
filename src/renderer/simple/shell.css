@@ -4,7 +4,7 @@ body[data-simple-mode] .app-main-col > :not(.titlebar):not(#simple-pane),
 body[data-simple-mode] .app-sidebar > :not(.journal-brand):not(.simple-nav):not(.journal-side-life),
 body[data-simple-mode] .titlebar :is(.journal-theme-picker,#btn-settings,.titlebar-shortcuts),
 body:not([data-simple-mode]) .simple-nav,
-body:not([data-simple-mode]) :is(#open-daily-widget,#simple-google-button) { display: none !important; }
+body:not([data-simple-mode]) :is(#open-daily-widget,#simple-google-button,#simple-design-picker) { display: none !important; }
 body[data-simple-mode] .app-main-col { background: #f6f8f8; }
 body[data-simple-mode] .titlebar { background: #ffffff; border-bottom: 1px solid #dce5e2; }
 #mode-switch { -webkit-app-region: no-drag; display: flex; gap: 2px; align-items: center; background: #f0f4f1; border-radius: 8px; padding: 2px; flex-shrink: 0; }
@@ -71,3 +71,26 @@ body[data-simple-mode] .titlebar #simple-google-button { margin-left:auto; }
 #simple-account-menu { position:fixed; inset:auto; margin:0; max-width: min(320px,90vw); padding:13px; background:#fff; color:#20362f; border:1px solid #d1ddd5; border-radius:9px; box-shadow:0 4px 20px #123a281a; }
 #simple-account-menu p { margin:0 0 9px; overflow-wrap:anywhere; }
 #simple-account-menu button { padding:5px 9px; border:1px solid #ccdad5; border-radius:6px; background:#fff; color:inherit; cursor:pointer; }
+
+#simple-design-picker {
+  -webkit-app-region: no-drag;
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  color: var(--simple-muted); font: 600 12px/1.4 "Malgun Gothic",sans-serif;
+}
+#simple-design {
+  max-width: 8em; min-height: 30px; padding: 3px 4px 3px 7px; cursor: pointer;
+  color: var(--simple-ink); background: var(--simple-surface);
+  border: 1px solid var(--simple-edge); border-radius: 6px; font: inherit;
+}
+#simple-design:focus-visible { outline: 2px solid var(--simple-accent); outline-offset: 2px; }
+body[data-simple-mode][data-simple-design] {
+  --sb-rail: var(--simple-wash); --sb-rail-ink: var(--simple-ink); --sb-rail-muted: var(--simple-muted);
+  --sb-paper: var(--simple-surface); --sb-ink: var(--simple-ink); --sb-edge: var(--simple-edge);
+  --sb-line: var(--simple-edge); --sb-accent: var(--simple-accent); --sb-accent-deep: var(--simple-accent);
+}
+body[data-simple-mode][data-simple-design] .titlebar { background: var(--simple-surface); border-color: var(--simple-edge); }
+body[data-simple-mode] :is(#open-daily-widget,#mode-switch,#simple-google-button[data-connected]) { background: var(--simple-wash); color: var(--simple-accent); }
+body[data-simple-mode] :is(#open-daily-widget,#simple-google-button) { border-color: var(--simple-edge); }
+body[data-simple-mode] #simple-google-button { color: var(--simple-accent); }
+body[data-simple-mode] #mode-switch button { color: var(--simple-muted); }
+body[data-simple-mode] #mode-switch button[aria-pressed=true] { background: var(--simple-accent); color: white; }

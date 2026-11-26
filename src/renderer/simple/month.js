@@ -5,6 +5,7 @@
   const dayKey = date => monthKey(date) + '-' + pad(date.getDate());
   let currentGrid;
   let pickedDate;
+  let openedControl;
   const post = message => parent.postMessage(message, '*');
 
   function element(tag, className, text) {
@@ -22,79 +23,90 @@
     return button;
   }
 
-  function countBadge(count, completed) {
-    const badge = element('span', 'sdm-count' + (completed ? ' sdm-count-done' : ''), count);
-    badge.title = (completed ? '완료 ' : '남은 일 ') + count + '건';
-    return badge;
+  function openCell(cell, control) {
+    pickedDate = cell.dataset.date;
+    openedControl = control.dataset.eventId || control.className;
+    currentGrid.panel.querySelector('.sdm-selected')?.classList.remove('sdm-selected');
+    cell.classList.add('sdm-selected');
+    post({ type: 'simple-calendar-open', date: pickedDate, eventId: control.dataset.eventId,
+      list: control.classList.contains('sdm-more') });
   }
 
-  function dayButton(date, state, displayMonth) {
+  function findControl(cell, key) {
+    return [...cell.querySelectorAll('button')].find(control => (control.dataset.eventId || control.className) === key);
+  }
+
+  function dayCell(date, state, displayMonth) {
     const key = dayKey(date);
-    const tasks = state.tasksFor(key);
-    const undone = tasks.filter(task => !task.done);
-    const done = tasks.filter(task => task.done);
     const label = date.getMonth() + 1 + '월 ' + date.getDate() + '일 ' + weekdays[date.getDay()] + '요일';
-    const button = element('button', 'sdm-day');
-    button.type = 'button';
-    button.classList.toggle('sdm-outside', date.getMonth() !== displayMonth);
-    button.dataset.date = key;
-    button.classList.toggle('sdm-selected', key === (pickedDate || state.selected));
-    button.classList.toggle('sdm-sunday', date.getDay() === 0);
-    if (key === state.today) button.setAttribute('aria-current', 'date');
-    button.dataset.summary = label + (key === state.today ? ', 오늘' : '') + ', 남은 일 ' + undone.length + '건, 완료 ' + done.length + '건';
-    button.setAttribute('aria-label', button.dataset.summary + ', 일정 추가');
-    button.addEventListener('click', () => {
-      pickedDate = key;
-      currentGrid.panel.querySelector('.sdm-selected')?.classList.remove('sdm-selected');
-      button.classList.add('sdm-selected');
-      post({ type: 'simple-calendar-open', date: key });
-    });
+    const cell = element('div', 'sdm-day');
+    cell.setAttribute('role', 'group');
+    cell.classList.toggle('sdm-outside', date.getMonth() !== displayMonth);
+    cell.dataset.date = key;
+    cell.classList.toggle('sdm-selected', key === (pickedDate || state.selected));
+    cell.classList.toggle('sdm-sunday', date.getDay() === 0);
+    cell.classList.toggle('sdm-saturday', date.getDay() === 6);
+    if (key === state.today) cell.setAttribute('aria-current', 'date');
+    cell.dataset.summary = label + (key === state.today ? ', 오늘' : '');
+    cell.setAttribute('aria-label', cell.dataset.summary);
+    const add = element('button', 'sdm-add');
+    add.type = 'button';
+    add.setAttribute('aria-label', cell.dataset.summary + ', 일정 추가');
+    add.addEventListener('click', () => openCell(cell, add));
 
-    const top = element('span', 'sdm-day-top');
-    top.append(element('span', 'sdm-number', date.getDate()));
-    const counts = element('span', 'sdm-counts');
-    if (undone.length) counts.append(countBadge(undone.length, false));
-    if (done.length) counts.append(countBadge(done.length, true));
-    top.append(counts);
-    button.append(top);
-
-    const list = element('span', 'sdm-lines');
-    for (const task of undone.concat(done).slice(0, 2)) {
-      const line = element('span', 'sdm-line' + (task.done ? ' sdm-line-done' : ''), task.title);
-      line.title = task.title;
-      list.append(line);
-    }
-    button.append(element('span', 'sdm-events'), list);
-    return button;
+    const dateLine = element('span', 'sdm-date-line');
+    dateLine.append(element('span', 'sdm-number', date.getDate()), element('span', 'sdm-holiday-name'));
+    cell.append(add, dateLine, element('span', 'sdm-events'));
+    return cell;
   }
 
-  function paintEvents(calendarDays, statusText, retryAvailable) {
+  function paintEvents(calendarDays, holidays, statusText, retryAvailable) {
     const status = currentGrid.panel.querySelector('.sdm-status');
     status.querySelector('span').textContent = statusText || '';
     status.querySelector('button').hidden = !retryAvailable;
     status.hidden = !statusText;
     for (const cell of currentGrid.panel.querySelectorAll('.sdm-day')) {
       const items = calendarDays[cell.dataset.date] || [];
+      const holiday = holidays[cell.dataset.date] || '';
+      cell.classList.toggle('sdm-holiday', Boolean(holiday));
+      cell.querySelector('.sdm-holiday-name').textContent = holiday;
       const list = cell.querySelector('.sdm-events');
+      const active = document.activeElement;
+      const restore = document.hasFocus() && list.contains(active) ? active.dataset.eventId || active.className : null;
       list.replaceChildren();
-      cell.setAttribute('aria-label', cell.dataset.summary + ', 일정 ' + items.length + '건, 일정 추가');
-      cell.title = items.map(e => e.label).join('\n');
+      const label = [cell.dataset.summary, holiday, '일정 ' + items.length + '건'].filter(Boolean).join(', ');
+      cell.setAttribute('aria-label', label);
+      cell.querySelector('.sdm-add').setAttribute('aria-label', label + ', 일정 추가');
+      cell.title = [holiday, ...items.map(e => e.label)].filter(Boolean).join('\n');
       for (const item of items.slice(0, 2)) {
-        const entry = element('span', 'sdm-event', item.label);
-        if (item.color) entry.style.borderInlineStartColor = item.color;
+        const entry = element('button', 'sdm-event', item.label);
+        entry.type = 'button';
+        entry.dataset.eventId = item.id;
+        entry.setAttribute('aria-label', item.label + (item.editable ? ' 일정 수정' : ' 일정 보기'));
+        entry.addEventListener('click', () => openCell(cell, entry));
+        if (item.color) entry.style.backgroundColor = item.color;
+        entry.title = item.label;
         list.append(entry);
       }
-      if (items.length > 2) list.append(element('span', 'sdm-more', '+' + (items.length - 2) + '건'));
+      if (items.length > 2) {
+        const more = element('button', 'sdm-more', '+' + (items.length - 2) + '건');
+        more.type = 'button';
+        more.setAttribute('aria-label', cell.dataset.summary + ', 전체 일정 ' + items.length + '건 보기');
+        more.addEventListener('click', () => openCell(cell, more));
+        list.append(more);
+      }
+      if (restore) (findControl(cell, restore) || cell.querySelector('.sdm-add')).focus({ preventScroll: true });
     }
   }
 
   window.addEventListener('message', ({ source, data }) => {
     if (source !== parent || !currentGrid?.panel.isConnected) return;
     if (data?.type === 'simple-calendar-events' && data.first === currentGrid.first && data.limit === currentGrid.limit) {
-      paintEvents(data.days, data.statusText, data.retryAvailable);
+      paintEvents(data.days, data.holidays || {}, data.statusText, data.retryAvailable);
     }
     if (data?.type === 'simple-calendar-closed') {
-      currentGrid.panel.querySelector('.sdm-selected')?.focus({ preventScroll: true });
+      const cell = currentGrid.panel.querySelector('.sdm-selected');
+      if (cell) (findControl(cell, openedControl) || cell.querySelector('.sdm-add')).focus({ preventScroll: true });
     }
   });
 
@@ -127,15 +139,14 @@
     const calendar = element('div', 'sdm-calendar');
     calendar.style.setProperty('--week-count', slots / 7);
     for (const [index, name] of weekdays.entries()) {
-      calendar.append(element('span', 'sdm-weekday' + (index === 0 ? ' sdm-sunday' : ''), name));
+      const weekColor = index === 0 ? ' sdm-sunday' : index === 6 ? ' sdm-saturday' : '';
+      calendar.append(element('span', 'sdm-weekday' + weekColor, name));
     }
     for (let index = 0; index < slots; index++) {
-      calendar.append(dayButton(new Date(year, month, index + 1 - first.getDay(), 12), state, month));
+      calendar.append(dayCell(new Date(year, month, index + 1 - first.getDay(), 12), state, month));
     }
 
-    const legend = element('div', 'sdm-legend');
-    legend.append(element('span', 'sdm-legend-pending', '남은 일'), element('span', 'sdm-legend-done', '완료'));
-    panel.append(toolbar, calendar, legend);
+    panel.append(toolbar, calendar);
     host.replaceChildren(panel);
     const start = new Date(year, month, 1 - first.getDay(), 12);
     const limit = new Date(year, month, 1 - first.getDay() + slots, 12);

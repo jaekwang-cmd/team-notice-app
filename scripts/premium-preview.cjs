@@ -125,8 +125,9 @@ function createPreviewServer() {
     const name = decodeURIComponent(url.pathname.slice(1));
     const staticFile = /^[a-zA-Z0-9_-]+\.(?:css|js|svg|png|woff2?)$/.test(name);
     const premiumFont = /^(?:premium-fonts|story-fonts)\/[a-z0-9-]+\.woff2$/.test(name);
+    const fontPreview = /^font-previews\/(?:fonts\.css|[a-z0-9.-]+\.woff2)$/.test(name);
     const simpleFile = /^simple\/[a-z-]+\.(?:html|js|css)$/.test(name);
-    if (!staticFile && !premiumFont && !simpleFile) { res.statusCode = 404; return res.end(); }
+    if (!staticFile && !premiumFont && !fontPreview && !simpleFile) { res.statusCode = 404; return res.end(); }
     const target = path.resolve(rendererRoot, name);
     if (!target.startsWith(rendererRoot + path.sep) || !fs.existsSync(target)) { res.statusCode = 404; return res.end(); }
     const type = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.woff': 'font/woff' }[path.extname(name)];

@@ -76,6 +76,8 @@ header button { -webkit-app-region: no-drag; }
 .task-title { min-width:0; font-size:1em; line-height:1.5; overflow-wrap:anywhere; }
 .task-row input:checked + .task-title { color:var(--secondary-text); opacity:.8; text-decoration:line-through; }
 .remove { opacity:0; }
+.marker-edit { width:auto; min-width:32px; padding-inline:4px; font-size:.8em; white-space:nowrap; }
+#marker-controls { flex:none; }
 .task-row:hover .remove,.task-row:focus-within .remove { opacity:1; }
 @media (hover:none) { .remove { opacity:1; } }
 .done-heading { font-size:max(11px,.8em); color:var(--secondary-text); font-weight:var(--type-weight); width:fit-content; margin:12px 0 1px; }

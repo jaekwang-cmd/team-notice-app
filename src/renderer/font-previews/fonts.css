@@ -1,0 +1,22 @@
+/* Local label previews from Google Fonts and Pretendard v1.3.9. Full text uses the application's normal font loader. See LICENSES.txt. */
+@font-face { font-family: 'Yeobaek Preview Gowun Dodum'; src: url('./gowundodum.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Nanum Gothic'; src: url('./nanumgothic.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Gothic A1'; src: url('./gothica1.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Noto Serif KR'; src: url('./notoserifkr.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Gowun Batang'; src: url('./gowunbatang.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Nanum Myeongjo'; src: url('./nanummyeongjo.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Nanum Pen Script'; src: url('./nanumpenscript.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Gaegu'; src: url('./gaegu.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Hi Melody'; src: url('./himelody.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Gamja Flower'; src: url('./gamjaflower.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Single Day'; src: url('./singleday.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Nanum Brush Script'; src: url('./nanumbrushscript.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Poor Story'; src: url('./poorstory.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Jua'; src: url('./jua.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Hahmlet'; src: url('./hahmlet.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Diphylleia'; src: url('./diphylleia.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Noto Sans KR'; src: url('./notosanskr.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview IBM Plex Sans KR'; src: url('./ibmplexsanskr.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Yeobaek Preview Pretendard'; src: url('./pretendardvariable.subset.89.woff2') format('woff2'); font-weight: 45 920; font-display: swap; unicode-range: U+B514, U+BCF8; }
+@font-face { font-family: 'Yeobaek Preview Pretendard'; src: url('./pretendardvariable.subset.90.woff2') format('woff2'); font-weight: 45 920; font-display: swap; unicode-range: U+C790; }
+@font-face { font-family: 'Yeobaek Preview Pretendard'; src: url('./pretendardvariable.subset.91.woff2') format('woff2'); font-weight: 45 920; font-display: swap; unicode-range: U+0020, U+0028, U+0029, U+0050, U+0061, U+0064, U+0065, U+006E, U+0072, U+0074, U+AE30, U+C778; }

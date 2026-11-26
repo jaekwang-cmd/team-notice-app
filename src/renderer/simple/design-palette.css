@@ -1,0 +1,24 @@
+[data-simple-design="mint"] {
+  --simple-canvas: #f6f8f8; --simple-surface: #fff; --simple-wash: #eaf3ed;
+  --simple-ink: #182c30; --simple-muted: #4f6860; --simple-edge: #ceded6; --simple-accent: #0a695d;
+}
+[data-simple-design="paper"] {
+  --simple-canvas: #f2eee5; --simple-surface: #fffdf7; --simple-wash: #f3ebdc;
+  --simple-ink: #382f26; --simple-muted: #665a4c; --simple-edge: #dfd4bd; --simple-accent: #87542d;
+}
+[data-simple-design="blue"] {
+  --simple-canvas: #eff3f8; --simple-surface: #fff; --simple-wash: #e7effa;
+  --simple-ink: #1d304a; --simple-muted: #4f637c; --simple-edge: #c8d7e9; --simple-accent: #235ba4;
+}
+[data-simple-design="lavender"] {
+  --simple-canvas: #f5f2f9; --simple-surface: #fefdff; --simple-wash: #eee9f6;
+  --simple-ink: #392f49; --simple-muted: #655b72; --simple-edge: #dcd3e7; --simple-accent: #69508b;
+}
+[data-simple-design="apricot"] {
+  --simple-canvas: #fbf4ee; --simple-surface: #fffdfb; --simple-wash: #faeadc;
+  --simple-ink: #423129; --simple-muted: #745b4e; --simple-edge: #e7cfc0; --simple-accent: #974a2e;
+}
+[data-simple-design="graphite"] {
+  --simple-canvas: #f3f3f2; --simple-surface: #fff; --simple-wash: #ededeb;
+  --simple-ink: #252525; --simple-muted: #595958; --simple-edge: #cccdca; --simple-accent: #414341;
+}

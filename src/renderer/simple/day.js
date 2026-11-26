@@ -35,7 +35,9 @@
   let pendingRollover = false;
   const drafts = new Map();
   const collapsed = new Set();
-  const tasksFor = taskStore.tasksFor;
+  const listFor = (key, kind) => kind === 'notice' ? taskStore.noticesFor(key) : taskStore.tasksFor(key);
+  const panelId = (key, kind) => kind === 'notice' ? 'notice-' + key : key;
+  const noun = kind => kind === 'notice' ? '공지' : '할 일';
   let toastTimer;
   function notice(text, undo) {
     clearTimeout(toastTimer);
@@ -47,7 +49,7 @@
     toast.hidden = false;
     toastTimer = setTimeout(() => { toast.hidden = true; }, undo ? 8000 : 4600);
   }
-  function reportFailure() { notice('할 일 변경을 저장하지 못했어요. 다시 시도해 주세요.'); }
+  function reportFailure() { notice('변경을 저장하지 못했어요. 다시 시도해 주세요.'); }
   function showDate(key) {
     selected = key;
     month = key.slice(0, 7);
@@ -58,7 +60,7 @@
   }
   function dateHeader() {
     const header = element('section', 'day-intro');
-    const block = element('div');
+    const block = element('div', 'day-heading');
     const current = date(selected);
     const top = element('div', 'year-controls');
     top.append(element('span', 'year', current.getFullYear() + '년'));
@@ -75,14 +77,14 @@
     top.append(controls);
     const title = element('h1', 'date-title', shortDate(current));
     title.append(element('span', '', dayNames[current.getDay()] + '요일'));
-    block.append(top, title);
+    block.append(title, top);
     const week = element('nav', 'week');
     week.setAttribute('aria-label', '이번 주 날짜 선택');
     const weekStart = shifted(selected, -current.getDay());
     for (let n = 0; n < 7; n++) {
       const key = shifted(weekStart, n);
       const d = date(key);
-      const b = button(tasksFor(key).length ? 'has-tasks' : '', '', () => showDate(key), fullDate(d));
+      const b = button(taskStore.tasksFor(key).length ? 'has-tasks' : '', '', () => showDate(key), fullDate(d));
       b.setAttribute('aria-pressed', String(key === selected));
       b.append(element('span', 'weekday', dayNames[d.getDay()]), element('strong', '', d.getDate()));
       week.append(b);
@@ -90,48 +92,87 @@
     header.append(block, week);
     return header;
   }
-  function focusAdd(key) { document.getElementById('add-' + key)?.focus({preventScroll: true}); }
-  function finishDraft(key) {
-    drafts.delete(key);
+  function finishDraft(id) {
+    drafts.delete(id);
+    if (view !== 'day') return;
     if (pendingRollover && followsToday && !hasVisibleDraft()) {
       showDate(today);
-    } else { render(); focusAdd(key); }
+    } else {
+      const input = document.getElementById('entry-' + id);
+      const form = input?.closest('form');
+      const returnFocus = form?.contains(document.activeElement);
+      form?.remove();
+      if (returnFocus) document.getElementById('add-' + id)?.focus({preventScroll:true});
+    }
   }
-  function entryForm(key) {
+  function entryForm(key, kind) {
+    const id = panelId(key, kind);
+    const draft = drafts.get(id);
     const form = element('form', 'entry-form');
     const input = element('input');
-    input.id = 'entry-' + key;
-    input.setAttribute('aria-label', fullDate(date(key)) + ' 새 할 일');
-    input.placeholder = '할 일을 입력하세요';
+    input.id = 'entry-' + id;
+    input.setAttribute('aria-label', fullDate(date(key)) + ' 새 ' + noun(kind));
+    input.placeholder = kind === 'notice' ? '공지 내용을 입력하세요' : '할 일을 입력하세요';
     input.required = true;
     input.maxLength = 2000;
     const scope = taskStore.status().scope;
-    input.value = drafts.get(key) || '';
-    input.addEventListener('input', () => { input.setCustomValidity(''); drafts.set(key, input.value); });
+    input.value = draft.title;
+    let composing = false;
+    let composingEnter = false;
+    input.addEventListener('compositionstart', () => { composing = true; });
+    input.addEventListener('compositionend', () => { composing = false; });
+    input.addEventListener('input', () => { input.setCustomValidity(''); draft.title = input.value; });
     input.addEventListener('keydown', e => {
-      if (e.isComposing || e.keyCode === 229) return;
-      if (e.key === 'Escape') { e.preventDefault(); finishDraft(key); }
+      if (composing || e.isComposing || e.keyCode === 229) {
+        // Let the IME commit the syllable. Ignore only an implicit form submit during this keypress.
+        if (e.key === 'Enter') {
+          composingEnter = true;
+          setTimeout(() => { composingEnter = false; }, 0);
+        }
+        return;
+      }
+      if (e.key === 'Escape') { e.preventDefault(); finishDraft(id); }
+    });
+    const markerHost = element('div', 'entry-marker');
+    let marker;
+    marker = window.simpleMarkers.attach(input, markerHost, {
+      initial:draft.highlights, pendingColor:draft.pendingColor,
+      onChange: ranges => {
+        draft.highlights = ranges;
+        draft.pendingColor = marker?.pendingColor();
+      }
     });
     const submit = element('button', '', '저장');
     submit.type = 'submit';
-    form.append(input, submit, button('', '취소', () => finishDraft(key)));
+    submit.disabled = draft.saving || !taskStore.status().canEdit;
+    form.append(input, markerHost, submit, button('', '취소', () => finishDraft(id)));
     form.onsubmit = async e => {
       e.preventDefault();
+      if (composing || composingEnter) return;
       const title = input.value.trim();
-      if (!title) { input.setCustomValidity('할 일을 입력해 주세요.'); input.reportValidity(); return; }
-      if (submit.disabled || !taskStore.status().canEdit || scope !== taskStore.status().scope) return;
+      if (!title) { input.setCustomValidity(input.placeholder); input.reportValidity(); return; }
+      if (draft.saving || !taskStore.status().canEdit || scope !== taskStore.status().scope) return;
+      const textAtSubmit = input.value;
+      draft.highlights = marker.read();
+      const marksAtSubmit = JSON.stringify(draft.highlights);
+      draft.saving = true;
       submit.disabled = true;
       try {
-        await taskStore.add(key, title);
-        if (scope !== taskStore.status().scope) return;
-        if (input.value.trim() === title) finishDraft(key);
-        else refreshTaskRows();
+        await taskStore.add(key, title, {kind, highlights:marker.readTrimmed()});
+        if (scope !== taskStore.status().scope || drafts.get(id) !== draft) return;
+        if (draft.title === textAtSubmit && JSON.stringify(draft.highlights) === marksAtSubmit) finishDraft(id);
       } catch { if (scope === taskStore.status().scope) reportFailure(); }
-      finally { submit.disabled = false; }
+      finally {
+        draft.saving = false;
+        if (drafts.get(id) === draft) {
+          const currentSubmit = document.getElementById('entry-' + id)?.form.querySelector('[type=submit]');
+          if (currentSubmit) currentSubmit.disabled = !taskStore.status().canEdit;
+        }
+      }
     };
     return form;
   }
-  function taskRow(key, task) {
+  function taskRow(key, kind, task) {
     const {scope,canEdit} = taskStore.status();
     const row = element('div', 'task-row');
     const label = element('label');
@@ -140,94 +181,103 @@
     check.id = 'task-' + task.id;
     check.checked = task.done;
     check.disabled = !canEdit;
-    check.onchange = () => {
-      const completed = check.checked;
-      taskStore.setDone(key, task.id, completed).catch(reportFailure);
-      const delay = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 145;
-      setTimeout(() => {
-        if (!row.isConnected || completed !== check.checked) return;
-        // Rebuild only this panel so an entry field on the other date keeps focus.
-        const old = row.closest('.task-panel');
-        const active = document.activeElement;
-        const restore = active === check;
-        const sameForm = old.contains(active) && active.matches('.entry-form input');
-        const selection = sameForm ? [active.selectionStart, active.selectionEnd] : null;
-        old.replaceWith(panel(key, key !== selected));
-        if (restore) {
-          const fresh = document.getElementById(check.id);
-          if (fresh?.closest('details:not([open])')) document.getElementById('done-' + key)?.focus({preventScroll:true});
-          else fresh?.focus({preventScroll:true});
-        } else if (sameForm) {
-          const entry = document.getElementById('entry-' + key);
-          entry?.focus({preventScroll:true});
-          entry?.setSelectionRange(...selection);
-        }
-      }, delay);
-    };
-    label.append(check, element('span', 'task-title', task.title));
+    check.onchange = () => { taskStore.setDone(key, task.id, check.checked).catch(reportFailure); };
+    const title = element('span', 'task-title');
+    window.simpleMarkers.render(title, task.title, task.highlights || []);
+    label.append(check, title);
+    const edit = button('edit-mark', '수정', () => {
+      window.simpleMarkers.edit(edit, task, async (title,highlights) => {
+        if (scope !== taskStore.status().scope || !taskStore.status().canEdit) return;
+        await taskStore.edit(key, task, title, highlights);
+      });
+    }, task.title + ' 수정');
+    edit.id = 'edit-' + task.id;
+    edit.disabled = !canEdit;
     const del = button('remove', '', () => {
-      const list = tasksFor(key);
+      const list = listFor(key, kind);
       const index = list.findIndex(t => t.id === task.id);
       if (index < 0) return;
-      taskStore.remove(key, task.id).catch(reportFailure);
-      render(); focusAdd(key);
-      notice('할 일을 삭제했어요.', () => {
-        if (scope !== taskStore.status().scope) return;
-        taskStore.restore(key, task, index).catch(reportFailure);
-        render();
-      });
+      taskStore.remove(key, task.id).then(() => {
+        if (scope !== taskStore.status().scope || view !== 'day') return;
+        notice(kind === 'notice' ? '공지를 삭제했어요.' : '할 일을 삭제했어요.', () => {
+          if (scope === taskStore.status().scope) taskStore.restore(key, task, index).catch(reportFailure);
+        });
+      }).catch(reportFailure);
+      document.getElementById('add-' + panelId(key, kind))?.focus({preventScroll:true});
     }, task.title + ' 삭제');
     del.title = '삭제';
     del.disabled = !canEdit;
     del.append(element('i', 'trash'));
-    row.append(label, del);
+    row.append(label, edit, del);
     return row;
   }
-  function dayLabel(key) {
-    if (key === today) return '오늘 할 일';
-    if (key === shifted(today, 1)) return '내일 할 일';
-    if (key === shifted(today, -1)) return '어제 할 일';
-    return (date(key).getMonth() + 1) + '월 ' + date(key).getDate() + '일 할 일';
+  function dayLabel(key, kind) {
+    let name = shortDate(date(key));
+    if (key === today) name = '오늘';
+    else if (key === shifted(today, 1)) name = '내일';
+    else if (key === shifted(today, -1)) name = '어제';
+    return name + ' ' + noun(kind);
   }
-  function panel(key, secondary) {
-    const section = element('section', 'task-panel' + (secondary ? ' secondary' : ''));
+  function panel(key, kind) {
+    const id = panelId(key, kind);
+    const section = element('section', 'task-panel');
+    section.dataset.kind = kind;
+    section.dataset.date = key;
+    if (key !== selected) section.classList.add(kind === 'task' ? 'secondary' : 'next-notices');
     const head = element('div', 'panel-head');
     const info = element('div');
-    const heading = element('h2', '', dayLabel(key));
-    heading.id = 'heading-' + key;
+    const heading = element('h2', '', dayLabel(key, kind));
+    heading.id = 'heading-' + id;
     section.setAttribute('aria-labelledby', heading.id);
-    const list = tasksFor(key);
-    const open = list.filter(t => !t.done);
-    const done = list.filter(t => t.done);
-    info.append(heading, element('span', 'panel-date', fullDate(date(key)) + ' · 남은 일 ' + open.length + '건'));
+    info.append(heading, element('span', 'panel-date'));
     const add = button('add', '추가', () => {
-      if (!drafts.has(key)) drafts.set(key, '');
+      if (!drafts.has(id)) drafts.set(id, {title:'',highlights:[],saving:false});
       if (!section.querySelector('form')) {
-        section.querySelector('.task-body').prepend(entryForm(key));
+        section.querySelector('.task-body').prepend(entryForm(key, kind));
       }
-      document.getElementById('entry-' + key)?.focus();
-    }, dayLabel(key) + ' 추가');
-    add.id = 'add-' + key;
-    add.disabled = !taskStore.status().canEdit;
+      document.getElementById('entry-' + id)?.focus();
+    }, dayLabel(key, kind) + ' 추가');
+    add.id = 'add-' + id;
     head.append(info, add);
     const body = element('div', 'task-body');
-    if (drafts.has(key)) body.append(entryForm(key));
-    if (open.length) for (const task of open) body.append(taskRow(key, task));
-    else body.append(element('p', 'empty', done.length ? '이날 할 일을 모두 마쳤어요.' : '등록한 할 일이 없어요.'));
+    if (drafts.has(id)) body.append(entryForm(key, kind));
     section.append(head, body);
+    refreshPanel(section);
+    return section;
+  }
+  function refreshPanel(section) {
+    const {date:key, kind} = section.dataset;
+    const id = panelId(key, kind);
+    const list = listFor(key, kind);
+    const isNotice = kind === 'notice';
+    const mainRows = isNotice ? list : list.filter(t => !t.done);
+    const done = isNotice ? [] : list.filter(t => t.done);
+    const prefix = isNotice ? '공지 ' + list.length : '남은 일 ' + mainRows.length;
+    section.querySelector('.panel-date').textContent = fullDate(date(key)) + ' · ' + prefix + '건';
+    const {canEdit} = taskStore.status();
+    section.querySelector('.add').disabled = !canEdit;
+    const submit = section.querySelector('form [type=submit]');
+    if (submit) submit.disabled = !canEdit || drafts.get(id)?.saving;
+    // Keep each live form in place, including its selection, open palette and IME composition.
+    const body = section.querySelector('.task-body');
+    for (const child of [...body.children]) if (child.tagName !== 'FORM') child.remove();
+    for (const task of mainRows) body.append(taskRow(key, kind, task));
+    if (!list.length) {
+      body.append(element('p','empty',isNotice ? '등록한 공지가 없어요.' : '등록한 할 일이 없어요.'));
+    } else if (!mainRows.length) body.append(element('p','empty','이날 할 일을 모두 마쳤어요.'));
+    section.querySelector('.completed')?.remove();
     if (done.length) {
       const details = element('details', 'completed');
-      details.open = !collapsed.has(key);
+      details.open = !collapsed.has(id);
       details.ontoggle = () => {
         if (!details.isConnected) return;
-        if (details.open) collapsed.delete(key); else collapsed.add(key);
+        if (details.open) collapsed.delete(id); else collapsed.add(id);
       };
       const summary = element('summary', '', '완료 ' + done.length + '건');
-      summary.id = 'done-' + key;
-      details.append(summary, ...done.map(t => taskRow(key, t)));
+      summary.id = 'done-' + id;
+      details.append(summary, ...done.map(t => taskRow(key, kind, t)));
       section.append(details);
     }
-    return section;
   }
   function render() {
     for (const b of document.querySelectorAll('[data-view]')) {
@@ -236,21 +286,27 @@
     }
     if (view === 'month') {
       main.replaceChildren();
-      window.renderSimpleMonth(main, {selected, today, month, tasksFor,
-        onMonth: key => { month = key; render(); }, onDate: showDate});
+      window.renderSimpleMonth(main, {selected, today, month,
+        onMonth: key => { month = key; render(); }});
     } else {
       const grid = element('div', 'boards');
-      grid.append(panel(selected, false), panel(shifted(selected, 1), true));
+      const next = shifted(selected, 1);
+      grid.append(panel(selected, 'task'), panel(next, 'task'), panel(selected, 'notice'), panel(next, 'notice'));
       main.replaceChildren(dateHeader(), grid);
     }
   }
   document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => {
     if (view === b.dataset.view) return;
     view = b.dataset.view;
-    if (view === 'month') month = selected.slice(0, 7);
+    if (view === 'month') {
+      month = selected.slice(0, 7);
+      document.getElementById('notice').hidden = true;
+    }
     render();
   });
-  function hasVisibleDraft() { return drafts.has(selected) || drafts.has(shifted(selected, 1)); }
+  function hasVisibleDraft() {
+    return [selected, shifted(selected,1)].some(key => drafts.has(key) || drafts.has(panelId(key,'notice')));
+  }
   function refreshDate() {
     const now = todayKey();
     if (now === today) return;
@@ -273,34 +329,27 @@
   window.addEventListener('focus', refreshDate);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshDate(); });
   function refreshTaskRows() {
-    if (view === 'month') { render(); return; }
+    if (view !== 'day') return;
     const oldHeader = main.querySelector('.day-intro');
     if (!oldHeader) { render(); return; }
+    const active = document.activeElement;
     oldHeader.replaceWith(dateHeader());
-    for (const [index, section] of [...main.querySelectorAll('.task-panel')].entries()) {
-      const key = shifted(selected, index);
-      const fresh = panel(key, index === 1);
-      section.querySelector('.panel-date').textContent = fresh.querySelector('.panel-date').textContent;
-      section.querySelector('.add').disabled = fresh.querySelector('.add').disabled;
-      const submit = section.querySelector('form [type=submit]');
-      if (submit && !taskStore.status().canEdit) submit.disabled = true;
-      const body = section.querySelector('.task-body');
-      // Keep the actual input attached, including its Korean IME composition and selection.
-      for (const child of [...body.children]) if (child.tagName !== 'FORM') child.remove();
-      for (const child of [...fresh.querySelector('.task-body').children]) if (child.tagName !== 'FORM') body.append(child);
-      section.querySelector('.completed')?.remove();
-      const completed = fresh.querySelector('.completed');
-      if (completed) section.append(completed);
+    main.querySelectorAll('.task-panel').forEach(refreshPanel);
+    if (active.id && !active.isConnected) {
+      const target = document.getElementById(active.id);
+      const collapsedGroup = target?.closest('details:not([open])');
+      (collapsedGroup ? collapsedGroup.querySelector('summary') : target)?.focus({preventScroll:true});
     }
   }
   taskStore.subscribe(source => {
     if (source === 'scope') {
+      window.simpleMarkers.closeEditor();
       drafts.clear(); collapsed.clear();
       clearTimeout(toastTimer);
       document.getElementById('notice').hidden = true;
       document.getElementById('undo').onclick = null;
-      render();
-    } else if (source === 'external') refreshTaskRows();
+      if (view === 'day') render();
+    } else if (source === 'local' || source === 'external') refreshTaskRows();
   });
   taskStore.ready.then(() => { render(); scheduleMidnight(); }).catch(reportFailure);
 })();

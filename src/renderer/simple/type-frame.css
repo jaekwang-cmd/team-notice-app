@@ -1,0 +1,15 @@
+:root { font-size: calc(16px * var(--simple-scale, 1)); }
+:root[data-type-family], :root[data-type-family] body * { font-family: var(--simple-font) !important; }
+:root[data-type-weight], :root[data-type-weight] body * { font-weight: var(--simple-weight) !important; font-synthesis: weight; }
+.date-buttons button, .entry-form button, .entry-form input, .sdm-controls button, .sdm-number { height: auto; min-height: max(var(--minimum-height, 25px), 1.8em); }
+.date-buttons { --minimum-height: 29px; }
+.entry-form { --minimum-height: 36px; }
+.entry-form input { --minimum-height: 38px; }
+.sdm-controls { --minimum-height: 34px; }
+.sdm-number { min-width: 1.8em; }
+.panel-head { flex-wrap: wrap; }
+.sdm-toolbar, .year-controls { flex-wrap: wrap; }
+.day-intro { flex-wrap: wrap; }
+.sdm-calendar { grid-template-rows: auto repeat(var(--week-count), minmax(max-content, 1fr)); }
+.sdm-day { min-height: max(58px, 2.5rem); }
+.sdm-events { grid-template-columns: minmax(0,1fr); }

@@ -7,7 +7,7 @@ await page.goto(`http://127.0.0.1:${server.address().port}/?view=memo`);await pa
 const measure=()=>page.evaluate(()=>Object.fromEntries(['.world-motion','#memo-today-label','.memo-done-toggle','#memo-text','.memo-row-text','.memo-row-meta','.sidebar-nav-btn'].map(s=>[s,parseFloat(getComputedStyle(document.querySelector(s)).fontSize)])));
 const base=await measure();await page.locator('#btn-settings').click();
 assert.equal(await page.locator('#theme-font optgroup option').count(),16);
-await page.locator('#theme-font').selectOption("'Hi Melody', 'Malgun Gothic', sans-serif");await page.locator('#theme-ui-font-scale').selectOption('140');await page.locator('#settings-save').click();const big=await measure();for(const key of Object.keys(base))assert.ok(big[key]>=base[key]*1.39,key);
+await page.locator('#theme-font-trigger').click();await page.locator('#theme-font-listbox [role=option]').filter({hasText:'하이 멜로디'}).click();await page.locator('#theme-ui-font-scale').selectOption('140');await page.locator('#settings-save').click();const big=await measure();for(const key of Object.keys(base))assert.ok(big[key]>=base[key]*1.39,key);
 assert.equal(await page.evaluate(()=>window.__preview.snapshot().theme.uiFontScale),'140');
 await page.locator('#btn-settings').click();await page.locator('#theme-ui-font-scale').selectOption('200');await page.locator('#settings-close').click();assert.equal((await measure())['.world-motion'],big['.world-motion']);
 await page.reload();await page.waitForFunction(()=>currentView==='memo'&&document.querySelector('.memo-done-toggle'));assert.equal((await measure())['.world-motion'],big['.world-motion']);

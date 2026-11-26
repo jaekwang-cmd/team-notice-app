@@ -26,6 +26,10 @@ const task = { day: '2026-11-25', title: '일정 확인', done: false, createdAt
 await allow(taskPath, 'PATCH', task, member);
 await allow('users/member/simpleTasks', 'GET', undefined, member);
 await allow(taskPath, 'PATCH', {...task, done:true}, member);
+await allow(taskPath, 'PATCH', {...task, title:'전화 다시 하기', done:true}, member);
+await deny(taskPath, 'PATCH', {...task, day:'2026-11-26'}, member);
+await deny(taskPath, 'PATCH', {...task, title:''}, member);
+await deny(taskPath, 'PATCH', {...task, title:'가'.repeat(2001)}, member);
 await deny(taskPath, 'GET', undefined, other);
 await deny('users/member/simpleTasks', 'GET', undefined, other);
 await deny(taskPath, 'DELETE', undefined, other);

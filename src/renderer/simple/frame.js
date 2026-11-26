@@ -5,7 +5,12 @@
     if (view) parent.postMessage({ type: 'simple-page', view }, '*');
   }
   window.addEventListener('message', event => {
-    if (event.source !== parent || event.data?.type !== 'select-simple-page') return;
+    if (event.source !== parent) return;
+    if (event.data?.type === 'simple-design' && ['mint','paper','blue','lavender','apricot','graphite'].includes(event.data.value)) {
+      document.documentElement.dataset.simpleDesign = event.data.value;
+      return;
+    }
+    if (event.data?.type !== 'select-simple-page') return;
     const view = event.data.view;
     if (view === 'day' || view === 'month') menu.querySelector('[data-view="' + view + '"]').click();
   });

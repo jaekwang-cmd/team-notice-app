@@ -1,0 +1,54 @@
+:root[data-simple-design]:not([data-simple-design="mint"]) {
+  --ink: var(--simple-ink); --teal: var(--simple-accent);
+  --quiet: var(--simple-muted); --line: var(--simple-edge);
+  background: var(--simple-canvas); color: var(--ink);
+  & :is(.task-panel,.sdm-month,.sdm-day,.sdm-control) {
+    background-color: var(--simple-surface); color: var(--ink); border-color: var(--line);
+  }
+  & :is(.panel-head,.sdm-weekday,.sdm-day.sdm-selected,.sdm-day:hover,.sdm-control:hover,.date-buttons button:hover,.week button:hover:not([aria-pressed="true"])) {
+    background-color: var(--simple-wash); color: var(--ink); border-color: var(--line);
+  }
+  & :is(.secondary .panel-head,.completed,.sdm-outside) { background-color: var(--simple-canvas); }
+  & :is(.panel-date,.completed summary,.empty,.date-buttons button,.week .weekday,.sdm-status,.sdm-more,.remove) { color: var(--quiet); }
+  & .week button[aria-pressed="true"] .weekday { color: #fff; }
+  & :is(.date-title span,.secondary .add) { color: var(--teal); }
+  & :is(.entry-form input,.secondary .add,.task-row input[type="checkbox"]) { border-color: color-mix(in srgb,var(--teal) 52%,var(--line)); }
+  & :is(.task-row input:checked,.sdm-day[aria-current="date"] .sdm-number) { background: var(--teal); color: #fff; }
+  & .task-row input:checked + .task-title { color: var(--quiet); }
+  & :is(.sdm-day,.sdm-weekday).sdm-sunday { color: #a14641; }
+  & :is(button,input):focus-visible { outline-color: var(--teal); }
+}
+:root[data-simple-design="paper"] {
+  & :is(.date-title,.panel-head h2,.sdm-title) { font-family: "Gowun Batang", Batang, "바탕", Georgia, serif; letter-spacing: -.035em; }
+  & :is(.task-panel,.sdm-month) { border-radius: 7px; box-shadow: 0 2px 0 #e7dfcf; }
+  & .task-body { background: repeating-linear-gradient(transparent 0 30px,#8c704815 30px 31px); }
+  & :is(.panel-head,.sdm-toolbar) { border-bottom: 3px double var(--line); }
+  & .task-row { border-color: transparent; }
+}
+:root[data-simple-design="blue"] {
+  & :is(.task-panel,.sdm-month) { border-radius: 10px; box-shadow: 0 2px 8px #152c4910; }
+  & :is(.panel-head,.sdm-toolbar) { box-shadow: inset 4px 0 var(--teal); }
+  & .secondary .panel-head { box-shadow: inset 4px 0 #7098c5; }
+  & .sdm-toolbar { border-bottom: 1px solid var(--line); }
+  & .week button, & .sdm-number { border-radius: 6px; }
+  & .task-row { border-bottom-style: dashed; border-color: var(--line); }
+}
+:root[data-simple-design="lavender"] {
+  & :is(.task-panel,.sdm-month) { border-radius: 20px; box-shadow: 0 4px 14px #3b24520c; }
+  & :is(.add,.sdm-control) { border-radius: 999px; }
+  & :is(.panel-head,.sdm-toolbar) { background-image: linear-gradient(110deg,#eee7f7,#f7f4fc); }
+  & .week button[aria-pressed="true"] { border-radius: 20px; }
+}
+:root[data-simple-design="apricot"] {
+  & :is(.task-panel,.sdm-month) { border-radius: 14px 14px 4px 4px; }
+  & :is(.panel-head,.sdm-toolbar) { border-top: 3px solid #cd8b66; }
+  & .secondary .panel-head { border-top-color: #d9baa4; }
+  & .task-row input[type="checkbox"] { border-radius: 50%; }
+}
+:root[data-simple-design="graphite"] {
+  & :is(.task-panel,.sdm-month,.add,.sdm-control,.week button) { border-radius: 3px; box-shadow: none; }
+  & :is(.panel-head,.sdm-toolbar) { background: #fff; border-bottom: 2px solid var(--simple-ink); }
+  & :is(.panel-head h2,.sdm-title) { font-weight: 750; letter-spacing: -.055em; }
+  & :is(.week strong,.sdm-number) { font-variant-numeric: tabular-nums; }
+  & .sdm-day[aria-current="date"] .sdm-number { border-radius: 2px; }
+}

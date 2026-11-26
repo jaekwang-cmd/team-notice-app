@@ -1,0 +1,28 @@
+:is(.diary-marker,.marker-trigger,.marker-swatches button)[data-color="yellow"] { --mark:#ffea85; }
+:is(.diary-marker,.marker-trigger,.marker-swatches button)[data-color="mint"] { --mark:#b3e8c7; }
+:is(.diary-marker,.marker-trigger,.marker-swatches button)[data-color="blue"] { --mark:#b9dcff; }
+:is(.diary-marker,.marker-trigger,.marker-swatches button)[data-color="pink"] { --mark:#ffc6db; }
+:is(.diary-marker,.marker-trigger,.marker-swatches button)[data-color="lavender"] { --mark:#d9cdfa; }
+:is(.diary-marker,.marker-trigger,.marker-swatches button)[data-color="peach"] { --mark:#ffcfaa; }
+mark.diary-marker { color:#192923; background-color:var(--mark); border-radius:2px; font:inherit; box-decoration-break:clone; }
+button.marker-trigger {
+  display:inline-flex; align-items:center; justify-content:center; gap:5px; flex:none; white-space:nowrap;
+  min-height:30px; height:auto; padding:3px 6px; border:1px solid #82938b70; border-radius:6px;
+  color:inherit; background:transparent; font:inherit; font-size:max(.78em,12px); cursor:pointer;
+}
+.marker-trigger::before { content:'가'; color:#283730; font:bold 12px/1.2 sans-serif; background:var(--mark,#eef0ee); border-bottom:3px solid var(--mark,#80988b); }
+.marker-menu, .marker-editor { z-index:2; box-sizing:border-box; -webkit-app-region:no-drag; background:#fff; color:#24362d; border:1px solid #b9c9c1; border-radius:10px; box-shadow:0 6px 24px #142d252b; font:normal 14px/1.5 "Malgun Gothic",sans-serif; }
+.marker-menu { position:fixed; inset:auto; margin:0; width:min(272px,calc(100vw - 8px)); max-height:calc(100dvh - 8px); overflow:auto; padding:12px; }
+.marker-menu p { margin:0 0 8px; font-size:13px; }
+.marker-swatches { display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
+.marker-menu .marker-swatches button { width:29px; min-height:29px; height:29px; border:1px solid #74877a60; border-radius:6px; background:var(--mark); color:#283730; padding:0; cursor:pointer; }
+.marker-menu .marker-swatches button:last-child { width:auto; font-size:12px; background:#f3f6f4; padding:0 5px; }
+.marker-swatches button:focus-visible,.marker-trigger:focus-visible,.marker-editor button:focus-visible { outline:2px solid #1e6a52; outline-offset:1px; }
+.marker-preview,.marker-sample { margin-top:8px; max-height:5em; overflow:auto; overflow-wrap:anywhere; white-space:pre-wrap; }
+.marker-editor { position:fixed; margin:auto; width:min(390px,calc(100vw - 16px)); max-height:calc(100dvh - 16px); padding:14px; overflow:auto; }
+.marker-editor::backdrop { background:#16262245; }
+.marker-editor > strong { display:block; }
+.marker-editor > input { display:block; width:100%; max-width:100%; font:inherit; margin:10px 0; border:1px solid #aebcb4; border-radius:6px; padding:7px 9px; color:#24362d; background:white; }
+.marker-actions { display:flex; justify-content:flex-end; gap:6px; margin-top:10px; }
+.marker-actions button { cursor:pointer; border:1px solid #c5d2c9; border-radius:6px; background:white; padding:5px 10px; font:inherit; color:#24362d; }
+.marker-actions button:last-child { color:white; background:#315d49; border-color:#315d49; }

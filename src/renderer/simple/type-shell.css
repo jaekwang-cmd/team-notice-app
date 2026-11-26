@@ -1,0 +1,36 @@
+body:not([data-simple-mode]) :is(#simple-type-button,#simple-type-panel) { display: none; }
+#simple-type-button {
+  -webkit-app-region: no-drag; cursor: pointer; min-height: 30px; padding: 3px 8px;
+  border: 1px solid var(--simple-edge); border-radius: 6px;
+  background: var(--simple-surface); color: var(--simple-ink); font: 600 12px/1.4 var(--ui-guide-font);
+}
+#simple-type-panel {
+  -webkit-app-region: no-drag; position: fixed; inset: auto 12px auto auto; margin: 0;
+  width: min(340px, 92vw); max-height: 75vh; overflow: auto; box-sizing: border-box;
+  padding: 12px 15px 16px; background: var(--simple-surface, white); color: var(--simple-ink);
+  border: 1px solid var(--simple-edge); border-radius: 12px; box-shadow: 0 8px 28px #15282326;
+}
+#simple-type-panel header, #simple-type-panel label { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+#simple-type-panel h2 { margin:0; font-size: 16px; }
+#simple-type-panel label { margin-top: 9px; font-size: 14px; }
+#simple-type-panel select { width: 65%; min-height: 34px; color: inherit; border:1px solid var(--simple-edge); border-radius:6px; background:var(--simple-surface); }
+#simple-type-panel header button { width:32px; height:32px; font-size:20px; background:transparent; border:0; color:inherit; cursor:pointer; }
+body[data-simple-mode] .titlebar { flex-wrap:wrap; height:auto; gap:4px; }
+body[data-simple-mode][data-type-family] :is(.titlebar,.simple-nav,#simple-calendar-detail),
+body[data-simple-mode][data-type-family] :is(.titlebar,.simple-nav,#simple-calendar-detail) :not(svg,path,rect,.sidebar-nav-icon,#simple-type-button) { font-family:var(--simple-font) !important; }
+body[data-simple-mode][data-type-weight] :is(.titlebar,.simple-nav,#simple-calendar-detail),
+body[data-simple-mode][data-type-weight] :is(.titlebar,.simple-nav,#simple-calendar-detail) :not(svg,path,rect,#simple-type-button) { font-weight:var(--simple-weight) !important; font-synthesis:weight; }
+#simple-type-preview {
+  margin:12px 0 0; padding:10px 12px; background:var(--simple-wash); color:var(--simple-ink); border-radius:8px;
+  font-family:var(--simple-font, Inter, Pretendard, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif);
+  font-weight:var(--simple-weight,400); font-size:calc(16px * var(--simple-scale,1)); line-height:1.5; overflow-wrap:anywhere;
+}
+body[data-simple-mode] :is(#simple-type-button,#simple-google-button,#mode-switch button,#simple-design-picker,#simple-design,#open-daily-widget,.simple-nav .sidebar-nav-label) { font-size:calc(12px * var(--simple-scale,1)); }
+body[data-storybook][data-simple-mode] .simple-nav .sidebar-nav-label { white-space:normal !important; word-break:keep-all; }
+body[data-simple-mode] #simple-calendar-detail :is(.event-title,input,select) { font-size:calc(15px * var(--simple-scale,1)) !important; }
+body[data-simple-mode] #simple-calendar-detail :is(.event-time,.event-team-badge,.event-actions button,.event-form label,.event-form button,.event-color-label,.day-event-empty) { font-size:calc(13px * var(--simple-scale,1)) !important; }
+body[data-simple-mode] #simple-calendar-detail #day-panel-title { font-size:calc(19px * var(--simple-scale,1)); }
+body[data-simple-mode] #simple-calendar-detail .day-event-item { color:#26352f; }
+body[data-simple-mode] #simple-calendar-detail .day-event-item :is(.event-title,.event-time,.event-actions button,.event-team-badge) { color:inherit; }
+body[data-simple-mode] #simple-calendar-detail .event-form :is(input,select):not([type=checkbox]) { height:auto; min-height:2em; }
+body[data-simple-mode] #simple-type-panel label, body[data-simple-mode] #simple-type-panel select { font-size:calc(14px * var(--simple-scale,1)); }
